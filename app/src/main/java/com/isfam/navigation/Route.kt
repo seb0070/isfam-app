@@ -3,74 +3,108 @@ package com.isfam.navigation
 import kotlinx.serialization.Serializable
 
 /**
- * 모든 화면 경로를 여기 한 곳에 선언합니다.
+ * IsFam 화면 경로.
+ * UI 키트 33개 화면을 기준으로 정의했습니다.
  *
- * Navigation Compose 2.8부터 문자열 조립 방식이 아니라
- * @Serializable 타입으로 경로를 정의합니다.
- * 오타가 컴파일 에러로 잡히고, 인자 전달도 타입 안전합니다.
+ * 33개 중 실제 라우트는 24개입니다. 나머지는 화면이 아니라 상태입니다.
+ *   20, 22 → 바텀시트 (21번 위에 표시)
+ *   23     → 토스트 (22번의 상태)
+ *   25     → 24번의 빈 상태
+ *   27     → 시스템 알림
+ *   28·29·30 → 같은 화면. riskLevel 값만 다름
  *
- *   ❌ 예전:  navController.navigate("history/$id")
- *   ✅ 지금:  navController.navigate(Route.AnalysisDetail(id))
+ * Navigation Compose 2.8부터 문자열이 아니라 @Serializable 타입으로
+ * 경로를 정의합니다. 오타가 컴파일 에러로 잡히고 인자 전달도 타입 안전합니다.
  *
- * Day 1 목표: 33개 화면을 전부 여기 선언하고 빈 화면으로 연결해서
- *             처음부터 끝까지 클릭으로 돌아다닐 수 있게 만들기.
+ *   ❌ navController.navigate("result/$id")
+ *   ✅ navController.navigate(Route.AnalysisResult(id))
  */
 sealed interface Route {
 
-    // ── 온보딩 ────────────────────────────────────────────────
+    // ── 1. 진입 · 인증 ────────────────────────────────────────
+    /** 01 스플래시 */
     @Serializable data object Splash : Route
-    @Serializable data object Intro : Route
-    @Serializable data object RoleSelect : Route          // 자녀 / 부모
 
-    // ── 인증 ─────────────────────────────────────────────────
-    @Serializable data object PhoneInput : Route
-    @Serializable data class PhoneVerify(val phoneNumber: String) : Route
-    @Serializable data object SignUp : Route
+    /** 02·03·04 온보딩 3단 — 페이저 한 화면으로 처리 */
+    @Serializable data object Onboarding : Route
+
+    /** 05 로그인 */
     @Serializable data object Login : Route
-    @Serializable data object Terms : Route
 
-    // ── 권한 · 기기 설정 ──────────────────────────────────────
-    @Serializable data object PermissionIntro : Route
-    @Serializable data object PermissionRequest : Route
-    @Serializable data object BatteryOptimization : Route
-    @Serializable data object AutoRecordingGuide : Route  // 삼성 설정 딥링크 안내
-    @Serializable data object SetupComplete : Route
+    /** 06 회원가입 (이름·번호·약관) */
+    @Serializable data object SignUp : Route
 
-    // ── 목소리 등록 ───────────────────────────────────────────
+    /** 07 휴대폰 OTP 인증 */
+    @Serializable data class OtpVerify(val phoneNumber: String) : Route
+
+    /** 08 권한 허용 안내 */
+    @Serializable data object Permission : Route
+
+    // ── 2. 가족 · 목소리 등록 ─────────────────────────────────
+    /** 09 목소리 등록 안내 */
     @Serializable data object VoiceIntro : Route
-    @Serializable data class VoiceRecord(val sentenceId: Int) : Route
-    @Serializable data class VoiceConfirm(val sentenceId: Int) : Route
+
+    /** 10 목소리 녹음 — 문장 1~3 */
+    @Serializable data class VoiceRecord(val sentenceIndex: Int) : Route
+
+    /** 11 성문 생성 중 */
+    @Serializable data object VoiceProcessing : Route
+
+    /** 12 등록 완료 */
     @Serializable data object VoiceComplete : Route
 
-    // ── 가족 ─────────────────────────────────────────────────
+    /** 13 가족 공간 진입 선택 (만들기 / 참여) */
+    @Serializable data object FamilyEntry : Route
+
+    /** 14 가족 공간 만들기 */
     @Serializable data object FamilyCreate : Route
-    @Serializable data object FamilyInvite : Route        // 초대 링크 / QR
-    @Serializable data class InvitePreview(val inviteCode: String) : Route
-    @Serializable data object FamilyList : Route
-    @Serializable data class FamilyMemberDetail(val memberId: Int) : Route
 
-    // ── 홈 ───────────────────────────────────────────────────
+    /** 15 가족 초대 — 온보딩 직후 */
+    @Serializable data object FamilyInvite : Route
+
+    /** 16 가족 초대 — 가족 관리에서 재진입 (초대 현황 포함) */
+    @Serializable data object FamilyInviteManage : Route
+
+    /** 17 초대 코드 직접 입력 */
+    @Serializable data object InviteCodeInput : Route
+
+    /** 18 초대 수락 · 연결 (Flow B) */
+    @Serializable data class InviteAccept(val inviteCode: String) : Route
+
+    // ── 3. 메인 (하단 탭 4개) ─────────────────────────────────
+    /** 19 홈 대시보드 · 20 등록 요청 시트 포함 */
     @Serializable data object Home : Route
-    @Serializable data object ProtectionStatus : Route
 
-    // ── 분석 ─────────────────────────────────────────────────
-    @Serializable data class Analyzing(val callEventId: Int) : Route
-    @Serializable data class AnalysisResult(val analysisId: Int) : Route
+    /** 21 가족 관리 · 22 프로필 바텀시트 · 23 토스트 포함 */
+    @Serializable data object FamilyManage : Route
+
+    /** 32 분석 기록 */
     @Serializable data object History : Route
-    @Serializable data class AnalysisDetail(val analysisId: Int) : Route
 
-    // ── 위험 대응 ─────────────────────────────────────────────
-    @Serializable data class DangerAlert(val analysisId: Int) : Route
-    @Serializable data class ShareWithFamily(val analysisId: Int) : Route
-    @Serializable data object SharedNumbers : Route
-
-    // ── 데모 ─────────────────────────────────────────────────
-    @Serializable data object DemoIntro : Route
-    @Serializable data object DemoPlay : Route
-    @Serializable data object DemoResult : Route
-
-    // ── 설정 ─────────────────────────────────────────────────
+    /** 26 설정 */
     @Serializable data object Settings : Route
-    @Serializable data object NotificationSettings : Route
-    @Serializable data object AccountSettings : Route
+
+    /** 24 가족 차단 번호 관리 · 25 빈 상태 포함 */
+    @Serializable data object BlockedNumbers : Route
+
+    // ── 4. 분석 · 결과 ────────────────────────────────────────
+    /** 분석 중 (통화 종료 후 10~30초) */
+    @Serializable data class Analyzing(val callEventId: Long) : Route
+
+    /** 28·29·30 결과 — 안전 / 확인 필요 / 위험이 모두 이 화면 */
+    @Serializable data class AnalysisResult(val analysisId: Long) : Route
+
+    /** 31 가족 위험 공유 */
+    @Serializable data class ShareDanger(val analysisId: Long) : Route
+
+    /** 33 기록 상세 */
+    @Serializable data class HistoryDetail(val analysisId: Long) : Route
+}
+
+/** 하단 탭 4개 */
+enum class BottomTab(val route: Route, val label: String) {
+    HOME(Route.Home, "홈"),
+    FAMILY(Route.FamilyManage, "가족"),
+    HISTORY(Route.History, "기록"),
+    SETTINGS(Route.Settings, "설정"),
 }
