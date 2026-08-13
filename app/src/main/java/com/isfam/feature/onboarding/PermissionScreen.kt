@@ -3,7 +3,6 @@ package com.isfam.feature.onboarding
 import android.app.Activity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -21,12 +20,11 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
@@ -34,13 +32,14 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import com.isfam.core.designsystem.Ink300
+import com.isfam.core.designsystem.Ink500
 import com.isfam.core.designsystem.IsFamButton
-import com.isfam.core.designsystem.IsFamOutlinedButton
 import com.isfam.core.designsystem.IsFamScaffold
 import com.isfam.core.designsystem.IsFamTheme
-import com.isfam.core.designsystem.Neutral400
-import com.isfam.core.designsystem.Neutral600
-import com.isfam.core.designsystem.RiskSafe
+import com.isfam.core.designsystem.IsFamTopBar
+import com.isfam.core.designsystem.Safe
+import com.isfam.core.designsystem.ScreenHeadline
 import com.isfam.core.permission.PermissionChecker
 import com.isfam.core.permission.PermissionStatus
 import com.isfam.core.permission.PermissionUiState
@@ -48,13 +47,12 @@ import com.isfam.core.permission.RuntimePermission
 import com.isfam.core.permission.SettingsIntents
 
 /**
- * 권한 요청 화면 (08번).
+ * 08. 권한 허용 안내
  *
- * 대충 만들면 실기기에서 반드시 깨지는 부분이라 세 가지를 처리합니다.
- *
- *   1. 거부 → 이유를 설명하고 다시 요청
+ * 대충 만들면 실기기에서 반드시 깨지는 세 가지를 처리합니다.
+ *   1. 거부      → 이유를 설명하고 다시 요청
  *   2. 영구 거부 → 팝업이 안 뜨므로 설정 앱으로 안내
- *   3. 설정에서 돌아옴 → 상태를 다시 읽어야 함 (ON_RESUME)
+ *   3. 설정에서 복귀 → 상태를 다시 읽어야 함 (ON_RESUME)
  *
  * 3번을 빠뜨리면 사용자가 설정에서 권한을 켜고 돌아와도
  * 화면이 계속 "거부됨"으로 남아 있습니다. 흔한 버그입니다.
@@ -62,6 +60,7 @@ import com.isfam.core.permission.SettingsIntents
 @Composable
 fun PermissionRoute(
     onAllGranted: () -> Unit,
+    onBack: () -> Unit,
 ) {
     val context = LocalContext.current
     val activity = context as Activity
@@ -79,17 +78,19 @@ fun PermissionRoute(
 
     // 설정 앱에 다녀오면 상태가 바뀌어 있을 수 있으므로 재확인
     val lifecycleOwner = LocalLifecycleOwner.current
-    LaunchedEffect(lifecycleOwner) {
+    DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 state = checker.snapshot(activity)
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     PermissionScreen(
         state = state,
+        onBack = onBack,
         onRequestClick = {
             val targets = RuntimePermission.required()
                 .filter { checker.statusOf(activity, it) != PermissionStatus.Granted }
@@ -106,6 +107,7 @@ fun PermissionRoute(
 @Composable
 fun PermissionScreen(
     state: PermissionUiState,
+    onBack: () -> Unit,
     onRequestClick: () -> Unit,
     onOpenSettings: () -> Unit,
     onNext: () -> Unit,
@@ -113,22 +115,23 @@ fun PermissionScreen(
 ) {
     IsFamScaffold(
         modifier = modifier,
+        topBar = { IsFamTopBar(title = "권한 허용", step = "3 / 3 단계", onBack = onBack) },
         bottomBar = {
             when {
                 state.canProceed ->
-                    IsFamButton("다음", onNext)
+                    IsFamButton("권한 허용하고 시작하기", onNext)
 
                 state.hasPermanentDenial -> {
                     Text(
                         "일부 권한이 차단되어 있어요. 설정에서 직접 켜주셔야 합니다.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Neutral600,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Ink500,
                     )
                     IsFamButton("설정 열기", onOpenSettings)
                 }
 
                 else ->
-                    IsFamButton("권한 허용하기", onRequestClick)
+                    IsFamButton("권한 허용하고 시작하기", onRequestClick)
             }
         },
     ) {
@@ -136,17 +139,12 @@ fun PermissionScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(24.dp),
+                .padding(horizontal = 20.dp),
         ) {
-            Text(
-                "안전한 통화 확인을 위해\n다음 권한이 필요해요",
-                style = MaterialTheme.typography.headlineMedium,
-            )
-            Spacer(Modifier.height(8.dp))
-            Text(
-                "통화 내용은 저장하지 않고, 분석이 끝나면 바로 지웁니다.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = Neutral600,
+            Spacer(Modifier.height(12.dp))
+            ScreenHeadline(
+                title = "두 가지만\n허용하면 끝나요",
+                subtitle = "통화 내용은 저장하지 않고, 분석이 끝나면 바로 지웁니다.",
             )
             Spacer(Modifier.height(32.dp))
 
@@ -156,7 +154,7 @@ fun PermissionScreen(
                     reason = permission.reason,
                     status = state.statusOf(permission),
                 )
-                Spacer(Modifier.height(20.dp))
+                Spacer(Modifier.height(24.dp))
             }
         }
     }
@@ -174,20 +172,16 @@ private fun PermissionRow(
         Icon(
             imageVector = if (granted) Icons.Filled.CheckCircle else Icons.Outlined.Circle,
             contentDescription = if (granted) "허용됨" else "허용 필요",
-            tint = if (granted) RiskSafe else Neutral400,
-            modifier = Modifier.size(28.dp),
+            tint = if (granted) Safe else Ink300,
+            modifier = Modifier.size(26.dp),
         )
         Spacer(Modifier.size(12.dp))
         Column {
             Text(title, style = MaterialTheme.typography.titleMedium)
-            Spacer(Modifier.height(2.dp))
-            Text(
-                reason,
-                style = MaterialTheme.typography.bodySmall,
-                color = Neutral600,
-            )
+            Spacer(Modifier.height(4.dp))
+            Text(reason, style = MaterialTheme.typography.bodyMedium, color = Ink500)
             if (status == PermissionStatus.PermanentlyDenied) {
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(6.dp))
                 Text(
                     "설정에서 직접 켜주세요",
                     style = MaterialTheme.typography.bodySmall,
@@ -200,7 +194,7 @@ private fun PermissionRow(
 
 // ── Preview — 상태별로 만들어두면 실행 없이 확인됩니다 ──────────
 
-@Preview(showBackground = true, heightDp = 720)
+@Preview(showBackground = true, widthDp = 390, heightDp = 844)
 @Composable
 private fun PermissionScreenInitialPreview() {
     IsFamTheme {
@@ -209,12 +203,12 @@ private fun PermissionScreenInitialPreview() {
                 runtime = RuntimePermission.required()
                     .associateWith { PermissionStatus.NotRequested }
             ),
-            onRequestClick = {}, onOpenSettings = {}, onNext = {},
+            onBack = {}, onRequestClick = {}, onOpenSettings = {}, onNext = {},
         )
     }
 }
 
-@Preview(showBackground = true, heightDp = 720)
+@Preview(showBackground = true, widthDp = 390, heightDp = 844)
 @Composable
 private fun PermissionScreenPartialPreview() {
     IsFamTheme {
@@ -226,12 +220,12 @@ private fun PermissionScreenPartialPreview() {
                     else PermissionStatus.PermanentlyDenied
                 }.toMap()
             ),
-            onRequestClick = {}, onOpenSettings = {}, onNext = {},
+            onBack = {}, onRequestClick = {}, onOpenSettings = {}, onNext = {},
         )
     }
 }
 
-@Preview(showBackground = true, heightDp = 720)
+@Preview(showBackground = true, widthDp = 390, heightDp = 844)
 @Composable
 private fun PermissionScreenGrantedPreview() {
     IsFamTheme {
@@ -240,7 +234,7 @@ private fun PermissionScreenGrantedPreview() {
                 runtime = RuntimePermission.required()
                     .associateWith { PermissionStatus.Granted }
             ),
-            onRequestClick = {}, onOpenSettings = {}, onNext = {},
+            onBack = {}, onRequestClick = {}, onOpenSettings = {}, onNext = {},
         )
     }
 }
