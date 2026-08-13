@@ -19,6 +19,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import com.isfam.core.designsystem.IsFamButton
 import com.isfam.core.designsystem.IsFamOutlinedButton
+import com.isfam.feature.onboarding.OnboardingRoute
 import com.isfam.feature.onboarding.PermissionRoute
 import com.isfam.feature.splash.SplashRoute
 
@@ -31,6 +32,7 @@ import com.isfam.feature.splash.SplashRoute
  *
  * 진행 상황
  *   ✅ 01 스플래시
+ *   ✅ 02·03·04 온보딩
  *   ✅ 08 권한
  *   ⬜ 나머지
  */
@@ -59,7 +61,13 @@ fun IsFamNavHost(
         }
 
         composable<Route.Onboarding> {
-            Placeholder("02·03·04 온보딩 3단", navController, Route.Login to "시작하기")
+            OnboardingRoute(
+                onFinish = {
+                    navController.navigate(Route.Login) {
+                        popUpTo(Route.Onboarding) { inclusive = true }
+                    }
+                },
+            )
         }
         composable<Route.Login> {
             Placeholder(
@@ -194,9 +202,11 @@ private fun Placeholder(
         Text(title, style = MaterialTheme.typography.headlineMedium)
 
         actions.forEach { (route, label) ->
-            IsFamButton(text = label, onClick = { navController.navigate(route) })        }
+            IsFamButton(text = label, onClick = { navController.navigate(route) })
+        }
 
         if (navController.previousBackStackEntry != null) {
-            IsFamOutlinedButton(text = "뒤로", onClick = { navController.popBackStack() })        }
+            IsFamOutlinedButton(text = "뒤로", onClick = { navController.popBackStack() })
+        }
     }
 }

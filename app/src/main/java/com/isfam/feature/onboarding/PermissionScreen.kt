@@ -32,8 +32,9 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
-import com.isfam.core.designsystem.Ink300
-import com.isfam.core.designsystem.Ink500
+import com.isfam.core.designsystem.Divider
+import com.isfam.core.designsystem.InkBody
+import com.isfam.core.designsystem.InkMuted
 import com.isfam.core.designsystem.IsFamButton
 import com.isfam.core.designsystem.IsFamScaffold
 import com.isfam.core.designsystem.IsFamTheme
@@ -125,7 +126,7 @@ fun PermissionScreen(
                     Text(
                         "일부 권한이 차단되어 있어요. 설정에서 직접 켜주셔야 합니다.",
                         style = MaterialTheme.typography.bodySmall,
-                        color = Ink500,
+                        color = InkMuted,
                     )
                     IsFamButton("설정 열기", onOpenSettings)
                 }
@@ -139,12 +140,12 @@ fun PermissionScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp),
+                .padding(horizontal = 26.dp),
         ) {
             Spacer(Modifier.height(12.dp))
             ScreenHeadline(
                 title = "두 가지만\n허용하면 끝나요",
-                subtitle = "통화 내용은 저장하지 않고, 분석이 끝나면 바로 지웁니다.",
+                body = "통화 내용은 저장하지 않고, 분석이 끝나면 바로 지웁니다.",
             )
             Spacer(Modifier.height(32.dp))
 
@@ -172,14 +173,14 @@ private fun PermissionRow(
         Icon(
             imageVector = if (granted) Icons.Filled.CheckCircle else Icons.Outlined.Circle,
             contentDescription = if (granted) "허용됨" else "허용 필요",
-            tint = if (granted) Safe else Ink300,
+            tint = if (granted) Safe else Divider,
             modifier = Modifier.size(26.dp),
         )
         Spacer(Modifier.size(12.dp))
         Column {
             Text(title, style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(4.dp))
-            Text(reason, style = MaterialTheme.typography.bodyMedium, color = Ink500)
+            Text(reason, style = MaterialTheme.typography.bodyMedium, color = InkMuted)
             if (status == PermissionStatus.PermanentlyDenied) {
                 Spacer(Modifier.height(6.dp))
                 Text(
