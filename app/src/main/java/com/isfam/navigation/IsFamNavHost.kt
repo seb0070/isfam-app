@@ -9,6 +9,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -19,9 +21,16 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import com.isfam.core.designsystem.IsFamButton
 import com.isfam.core.designsystem.IsFamOutlinedButton
+import com.isfam.feature.auth.LoginRoute
+import com.isfam.feature.auth.SignUpSession
+import com.isfam.feature.auth.SignUpRoute
 import com.isfam.feature.onboarding.OnboardingRoute
 import com.isfam.feature.onboarding.PermissionRoute
 import com.isfam.feature.splash.SplashRoute
+import com.isfam.feature.voice.VoiceCompleteRoute
+import com.isfam.feature.voice.VoiceIntroRoute
+import com.isfam.feature.voice.VoiceProcessingRoute
+import com.isfam.feature.voice.VoiceRecordRoute
 
 /**
  * 화면 이동 그래프.
@@ -33,13 +42,22 @@ import com.isfam.feature.splash.SplashRoute
  * 진행 상황
  *   ✅ 01 스플래시
  *   ✅ 02·03·04 온보딩
+ *   ✅ 05 로그인 · 06 회원가입 · 07 OTP
  *   ✅ 08 권한
+ *   ✅ 09·10·11·12 목소리 등록
  *   ⬜ 나머지
  */
 @Composable
 fun IsFamNavHost(
     navController: NavHostController = rememberNavController(),
 ) {
+    // 회원가입 정보는 06과 08 두 화면에 걸쳐 모입니다.
+    // 권한 상태가 signup 요청에 포함되므로 실제 API 호출은 08에서 일어납니다.
+    val signUpSession = remember { SignUpSession() }
+
+    // 문장별 녹음 파일. 3개가 모이면 서버로 업로드합니다.
+    val recordedVoiceFiles = remember { mutableStateMapOf<Int, java.io.File>() }
+
     NavHost(
         navController = navController,
         startDestination = Route.Splash,
@@ -70,45 +88,76 @@ fun IsFamNavHost(
             )
         }
         composable<Route.Login> {
-            Placeholder(
-                "05 로그인", navController,
-                Route.Home to "로그인",
-                Route.SignUp to "회원가입",
+            LoginRoute(
+                onLoginSuccess = {
+                    navController.navigate(Route.Home) {
+                        popUpTo(Route.Login) { inclusive = true }
+                    }
+                },
+                onSignUp = { navController.navigate(Route.SignUp) },
+                onBack = { navController.popBackStack() },
             )
         }
         composable<Route.SignUp> {
-            Placeholder(
-                "06 회원가입", navController,
-                Route.OtpVerify("01012345678") to "인증번호 받기",
+            SignUpRoute(
+                onNext = { form ->
+                    signUpSession.applyForm(form)
+                    navController.navigate(Route.Permission)
+                },
+                onBack = { navController.popBackStack() },
             )
-        }
-        composable<Route.OtpVerify> { entry ->
-            val args = entry.toRoute<Route.OtpVerify>()
-            Placeholder("07 OTP 인증\n${args.phoneNumber}", navController, Route.Permission to "확인")
         }
 
         composable<Route.Permission> {
             PermissionRoute(
-                onAllGranted = { navController.navigate(Route.VoiceIntro) },
+                session = signUpSession,
+                onSignUpComplete = {
+                    navController.navigate(Route.VoiceIntro) {
+                        popUpTo(Route.SignUp) { inclusive = true }
+                    }
+                },
                 onBack = { navController.popBackStack() },
             )
         }
 
         // ── 2. 가족 · 목소리 등록 ─────────────────────────────
         composable<Route.VoiceIntro> {
-            Placeholder("09 목소리 등록 안내", navController, Route.VoiceRecord(1) to "녹음 시작하기")
+            VoiceIntroRoute(
+                onStart = { navController.navigate(Route.VoiceRecord(1)) },
+                onBack = { navController.popBackStack() },
+            )
         }
         composable<Route.VoiceRecord> { entry ->
             val args = entry.toRoute<Route.VoiceRecord>()
-            val next = if (args.sentenceIndex < 3)
-                Route.VoiceRecord(args.sentenceIndex + 1) else Route.VoiceProcessing
-            Placeholder("10 목소리 녹음 ${args.sentenceIndex}/3", navController, next to "다음")
+            VoiceRecordRoute(
+                sentenceIndex = args.sentenceIndex,
+                onComplete = { file ->
+                    recordedVoiceFiles[args.sentenceIndex] = file
+                    if (args.sentenceIndex < 3) {
+                        navController.navigate(Route.VoiceRecord(args.sentenceIndex + 1))
+                    } else {
+                        navController.navigate(Route.VoiceProcessing) {
+                            popUpTo(Route.VoiceIntro)
+                        }
+                    }
+                },
+                onBack = { navController.popBackStack() },
+            )
         }
         composable<Route.VoiceProcessing> {
-            Placeholder("11 성문 생성 중", navController, Route.VoiceComplete to "완료")
+            VoiceProcessingRoute(
+                onComplete = {
+                    navController.navigate(Route.VoiceComplete) {
+                        popUpTo(Route.VoiceIntro) { inclusive = true }
+                    }
+                },
+            )
         }
         composable<Route.VoiceComplete> {
-            Placeholder("12 등록 완료", navController, Route.FamilyEntry to "다음 단계로")
+            VoiceCompleteRoute(
+                displayName = signUpSession.displayName.ifBlank { "회원" },
+                onNext = { navController.navigate(Route.FamilyEntry) },
+            )
         }
         composable<Route.FamilyEntry> {
             Placeholder(

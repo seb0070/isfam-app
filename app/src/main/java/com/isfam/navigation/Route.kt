@@ -34,8 +34,9 @@ sealed interface Route {
     /** 06 회원가입 (이름·번호·약관) */
     @Serializable data object SignUp : Route
 
-    /** 07 휴대폰 OTP 인증 */
-    @Serializable data class OtpVerify(val phoneNumber: String) : Route
+    // 07 OTP 화면은 제거했습니다.
+    // 휴대폰 인증은 회원가입 화면 안에서 인라인으로 처리합니다.
+    // 초대 코드 입력(17번)에서 같은 OtpInput 컴포넌트를 재사용합니다.
 
     /** 08 권한 허용 안내 */
     @Serializable data object Permission : Route

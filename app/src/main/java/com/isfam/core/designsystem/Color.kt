@@ -25,6 +25,12 @@ val SplashBottom = Color(0xFFEF6A05)
 val IllustBgStart = Color(0xFFFFF1DE)
 val IllustBgEnd = Color(0xFFF7F2E9)
 
+// 카드형 일러스트 배경 (160deg 그라데이션)
+val CardIllustStart = Color(0xFFFFF6E4)
+val CardIllustEnd = Color(0xFFFFEBD2)     // 09 등록 안내
+val SentenceCardEnd = Color(0xFFFFEEDB)   // 10 문장 카드
+val ProcessingEnd = Color(0xFFFFE3BE)     // 11 성문 생성
+
 // ── 판별 결과 3단 ─────────────────────────────────────────────
 val Safe = Color(0xFF5AA97A)
 val Caution = Color(0xFFE8A32B)
@@ -50,5 +56,14 @@ val DisabledBg = Color(0xFFEFE7DA)
 val DisabledFg = Color(0xFFB5A794)
 val ToggleOff = Color(0xFFE2DACE)
 val IndicatorOff = Color(0xFFE4D9C9)
+val EyebrowBrown = Color(0xFFC08A3A)    // "아래 문장을 읽어주세요"
+val WaveInactive = Color(0xFFEBE2D4)    // 파형 미재생 구간
+val TrackBeige = Color(0xFFEEE6DA)      // 진행바 배경
+val InkPlaceholder = Color(0xFFC9BFB3)  // 입력 전 값 · "보기" 링크
+val ProgressTrack = Color(0xFFEAE1D5)   // 단계 진행바 배경
+val DividerLight = Color(0xFFF2ECE3)    // 카드 내부 구분선
+val CheckboxOffBg = Color(0xFFF5F0E8)   // 선택 안 된 체크박스
+val OtpEmptyBg = Color(0xFFF6F1E9)      // 빈 OTP 칸
+val KeypadBg = Color(0xFFEFEAE2)        // 시스템 키패드 배경
 val Divider = Color(0xFFE7E2DC)
 val White = Color(0xFFFFFFFF)

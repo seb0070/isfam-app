@@ -46,6 +46,7 @@ import com.isfam.core.permission.PermissionStatus
 import com.isfam.core.permission.PermissionUiState
 import com.isfam.core.permission.RuntimePermission
 import com.isfam.core.permission.SettingsIntents
+import com.isfam.feature.auth.SignUpSession
 
 /**
  * 08. 권한 허용 안내
@@ -60,7 +61,9 @@ import com.isfam.core.permission.SettingsIntents
  */
 @Composable
 fun PermissionRoute(
-    onAllGranted: () -> Unit,
+    /** 06에서 모은 가입 정보. 여기서 권한 상태를 더해 서버로 보냅니다. */
+    session: SignUpSession,
+    onSignUpComplete: () -> Unit,
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -101,7 +104,22 @@ fun PermissionRoute(
         onOpenSettings = {
             SettingsIntents.safeStart(context, SettingsIntents.appDetails(context))
         },
-        onNext = onAllGranted,
+        onNext = {
+            // 권한 상태를 세션에 반영한 뒤 가입 API 를 호출합니다.
+            session.applyPermissions(
+                notification = checker.isGranted(RuntimePermission.Notification),
+                microphone = checker.isGranted(RuntimePermission.Microphone),
+                file = checker.isGranted(
+                    if (android.os.Build.VERSION.SDK_INT >= 33) RuntimePermission.MediaAudio
+                    else RuntimePermission.ExternalStorage
+                ),
+                // ⚠️ 앱이 확인할 수 없는 값입니다. 자동녹음 안내 화면에서
+                //    사용자가 "설정했어요"를 누르면 true 가 됩니다.
+                autoRecording = session.autoRecordingEnabled,
+            )
+            // TODO: POST /api/v1/auth/signup — session 을 SignupRequest 로 변환
+            onSignUpComplete()
+        },
     )
 }
 
@@ -120,7 +138,7 @@ fun PermissionScreen(
         bottomBar = {
             when {
                 state.canProceed ->
-                    IsFamButton("권한 허용하고 시작하기", onNext)
+                    IsFamButton(text = "허용하고 가입 완료", onClick = onNext)
 
                 state.hasPermanentDenial -> {
                     Text(
@@ -128,11 +146,11 @@ fun PermissionScreen(
                         style = MaterialTheme.typography.bodySmall,
                         color = InkMuted,
                     )
-                    IsFamButton("설정 열기", onOpenSettings)
+                    IsFamButton(text = "설정 열기", onClick = onOpenSettings)
                 }
 
                 else ->
-                    IsFamButton("권한 허용하고 시작하기", onRequestClick)
+                    IsFamButton(text = "권한 허용하기", onClick = onRequestClick)
             }
         },
     ) {
