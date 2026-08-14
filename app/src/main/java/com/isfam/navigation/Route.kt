@@ -79,14 +79,14 @@ sealed interface Route {
     /** 21 가족 관리 · 22 프로필 바텀시트 · 23 토스트 포함 */
     @Serializable data object FamilyManage : Route
 
-    /** 32 분석 기록 */
-    @Serializable data object History : Route
+    /**
+     * 32 분석 기록 · 24·25 차단 번호
+     * 두 화면을 세그먼트로 묶었습니다.
+     */
+    @Serializable data class History(val showBlocked: Boolean = false) : Route
 
     /** 26 설정 */
     @Serializable data object Settings : Route
-
-    /** 24 가족 차단 번호 관리 · 25 빈 상태 포함 */
-    @Serializable data object BlockedNumbers : Route
 
     // ── 4. 분석 · 결과 ────────────────────────────────────────
     /** 분석 중 (통화 종료 후 10~30초) */
@@ -106,6 +106,6 @@ sealed interface Route {
 enum class BottomTab(val route: Route, val label: String) {
     HOME(Route.Home, "홈"),
     FAMILY(Route.FamilyManage, "가족"),
-    HISTORY(Route.History, "기록"),
+    HISTORY(Route.History(), "기록"),
     SETTINGS(Route.Settings, "설정"),
 }

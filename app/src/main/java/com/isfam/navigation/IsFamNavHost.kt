@@ -9,6 +9,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
@@ -26,7 +28,11 @@ import com.isfam.core.designsystem.IsFamButton
 import com.isfam.core.designsystem.IsFamOutlinedButton
 import com.isfam.feature.auth.LoginRoute
 import com.isfam.core.designsystem.MainTab
+import com.isfam.core.designsystem.IsFamToast
 import com.isfam.feature.family.FamilyCreateRoute
+import com.isfam.feature.family.FamilyManageRoute
+import com.isfam.feature.family.FamilyMemberItem
+import com.isfam.feature.family.MemberProfileSheet
 import com.isfam.feature.family.FamilyEntryRoute
 import com.isfam.feature.family.FamilyInviteRoute
 import com.isfam.feature.family.InviteAcceptRoute
@@ -34,10 +40,13 @@ import com.isfam.feature.family.InviteCodeInputRoute
 import com.isfam.feature.family.InvitePreview
 import com.isfam.feature.auth.SignUpSession
 import com.isfam.feature.auth.SignUpRoute
+import com.isfam.feature.history.HistoryRoute
+import com.isfam.feature.history.HistorySegment
 import com.isfam.feature.home.HomeRoute
 import com.isfam.feature.home.MemberStatus
 import com.isfam.feature.home.RegistrationRequestSheet
 import com.isfam.feature.onboarding.OnboardingRoute
+import com.isfam.feature.result.AnalysisResultRoute
 import com.isfam.feature.onboarding.PermissionRoute
 import com.isfam.feature.splash.SplashRoute
 import com.isfam.feature.voice.VoiceCompleteRoute
@@ -60,6 +69,9 @@ import com.isfam.feature.voice.VoiceRecordRoute
  *   ✅ 09·10·11·12 목소리 등록
  *   ✅ 13·14·15·16·17·18 가족 공간 · 초대
  *   ✅ 19·20 홈 · 등록 요청 시트
+ *   ✅ 21·22·23 가족 관리 · 프로필 시트 · 토스트
+ *   ✅ 24·25·32 기록 탭 (분석 기록 · 차단 번호)
+ *   ✅ 28·29·30 분석 결과
  *   ⬜ 나머지
  */
 @Composable
@@ -243,9 +255,9 @@ fun IsFamNavHost(
                 onTabSelected = { tab -> navController.navigateToTab(tab) },
                 onAnalysisClick = { id -> navController.navigate(Route.AnalysisResult(id)) },
                 onInvite = { navController.navigate(Route.FamilyInviteManage) },
-                onBlockedNumbers = { navController.navigate(Route.BlockedNumbers) },
+                onBlockedNumbers = { navController.navigate(Route.History(showBlocked = true)) },
                 onRequestRegistration = { sheetMember = it },
-                onSeeAllHistory = { navController.navigate(Route.History) },
+                onSeeAllHistory = { navController.navigate(Route.History()) },
             )
 
             // 20. 등록 요청 바텀시트
@@ -259,31 +271,75 @@ fun IsFamNavHost(
             }
         }
         composable<Route.FamilyManage> {
-            Placeholder(
-                "21 가족 관리", navController,
-                Route.FamilyInviteManage to "가족 초대하기",
-                Route.BlockedNumbers to "가족 차단 번호",
-            )
+            var profileMember by remember { mutableStateOf<FamilyMemberItem?>(null) }
+            var toastMessage by remember { mutableStateOf<String?>(null) }
+
+            Box {
+                FamilyManageRoute(
+                    onTabSelected = { tab -> navController.navigateToTab(tab) },
+                    onInvite = { navController.navigate(Route.FamilyInviteManage) },
+                    onBlockedNumbers = { navController.navigate(Route.History(showBlocked = true)) },
+                    onMemberClick = { profileMember = it },
+                    onRequestRegistration = { member ->
+                        // TODO: 서버 알림 발송
+                        toastMessage = "${member.name}님에게 등록 요청을 보냈어요."
+                    },
+                )
+
+                // 23. 토스트
+                toastMessage?.let { message ->
+                    LaunchedEffect(message) {
+                        kotlinx.coroutines.delay(2500)
+                        toastMessage = null
+                    }
+                    IsFamToast(
+                        message = message,
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(start = 20.dp, end = 20.dp, bottom = 120.dp),
+                    )
+                }
+            }
+
+            // 22. 프로필 바텀시트
+            profileMember?.let { member ->
+                MemberProfileSheet(
+                    member = member,
+                    onSave = { displayName, autoAnalysis ->
+                        profileMember = null
+                        if (!autoAnalysis) {
+                            toastMessage = "${displayName}님과의 통화는 자동 분석 대상에서 제외됩니다."
+                        }
+                    },
+                    onDismiss = { profileMember = null },
+                )
+            }
         }
-        composable<Route.History> {
-            Placeholder("32 분석 기록", navController, Route.HistoryDetail(1) to "기록 상세")
+        composable<Route.History> { entry ->
+            val args = entry.toRoute<Route.History>()
+            HistoryRoute(
+                initialSegment =
+                    if (args.showBlocked) HistorySegment.Blocked else HistorySegment.Analysis,
+                onTabSelected = { tab -> navController.navigateToTab(tab) },
+                onItemClick = { id -> navController.navigate(Route.HistoryDetail(id)) },
+            )
         }
         composable<Route.Settings> {
             Placeholder("26 설정", navController)
-        }
-        composable<Route.BlockedNumbers> {
-            Placeholder("24 가족 차단 번호", navController)
         }
 
         // ── 4. 분석 · 결과 ────────────────────────────────────
         composable<Route.Analyzing> {
             Placeholder("분석 중…", navController, Route.AnalysisResult(1) to "결과 보기")
         }
-        composable<Route.AnalysisResult> {
-            Placeholder(
-                "28·29·30 결과", navController,
-                Route.ShareDanger(1) to "가족에게 알리기",
-                Route.History to "기록으로",
+        composable<Route.AnalysisResult> { entry ->
+            val args = entry.toRoute<Route.AnalysisResult>()
+            AnalysisResultRoute(
+                analysisId = args.analysisId,
+                onClose = { navController.popBackStack() },
+                onShareToFamily = { id -> navController.navigate(Route.ShareDanger(id)) },
+                onBlockAndReport = { /* TODO: 차단 목록 추가 + 신고 안내 */ },
+                onSeeDetail = { id -> navController.navigate(Route.HistoryDetail(id)) },
             )
         }
         composable<Route.ShareDanger> {
@@ -303,7 +359,7 @@ private fun NavHostController.navigateToTab(tab: MainTab) {
     val route: Route = when (tab) {
         MainTab.Home -> Route.Home
         MainTab.Family -> Route.FamilyManage
-        MainTab.History -> Route.History
+        MainTab.History -> Route.History()
         MainTab.Settings -> Route.Settings
     }
     navigate(route) {
