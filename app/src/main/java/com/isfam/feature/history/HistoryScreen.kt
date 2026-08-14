@@ -79,10 +79,27 @@ fun HistoryRoute(
 ) {
     var segment by remember { mutableStateOf(initialSegment) }
     var filter by remember { mutableStateOf(RiskFilter.All) }
+    var month by remember { mutableStateOf(FakeHistoryData.analysis.selectedMonth) }
+    var showMonthPicker by remember { mutableStateOf(false) }
 
-    // TODO: Repository 연결 시 교체
-    val analysisState = FakeHistoryData.analysis.copy(selectedFilter = filter)
+    // TODO: Repository 연결 시 교체. month 가 바뀌면 서버에서 다시 불러옵니다.
+    val analysisState = FakeHistoryData.analysis.copy(
+        selectedFilter = filter,
+        selectedMonth = month,
+    )
     val blockedState = FakeHistoryData.blocked
+
+    if (showMonthPicker) {
+        MonthPickerSheet(
+            options = analysisState.monthOptions,
+            selected = month,
+            onSelect = {
+                month = it
+                showMonthPicker = false
+            },
+            onDismiss = { showMonthPicker = false },
+        )
+    }
 
     HistoryScreen(
         segment = segment,
@@ -92,6 +109,7 @@ fun HistoryRoute(
         onFilterChange = { filter = it },
         onTabSelected = onTabSelected,
         onItemClick = onItemClick,
+        onMonthClick = { showMonthPicker = true },
         onUnblock = { /* TODO: DELETE /family/blocked-numbers/{id} */ },
     )
 }
@@ -105,6 +123,7 @@ fun HistoryScreen(
     onFilterChange: (RiskFilter) -> Unit,
     onTabSelected: (MainTab) -> Unit,
     onItemClick: (Long) -> Unit,
+    onMonthClick: () -> Unit,
     onUnblock: (Long) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -129,9 +148,10 @@ fun HistoryScreen(
                 )
                 if (segment == HistorySegment.Analysis) {
                     Text(
-                        "${analysisState.monthLabel} ▾",
+                        "${analysisState.selectedMonthLabel} ▾",
                         style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
                         color = InkMuted,
+                        modifier = Modifier.clickable(onClick = onMonthClick).padding(6.dp),
                     )
                 }
             }
@@ -225,7 +245,7 @@ private fun AnalysisSegment(
             state.groups.forEach { group ->
                 val visible = group.items.filter {
                     state.selectedFilter == RiskFilter.All ||
-                        it.riskLevel.matches(state.selectedFilter)
+                            it.riskLevel.matches(state.selectedFilter)
                 }
                 if (visible.isEmpty()) return@forEach
 
@@ -524,7 +544,7 @@ private fun HistoryAnalysisPreview() = IsFamTheme {
         analysisState = FakeHistoryData.analysis,
         blockedState = FakeHistoryData.blocked,
         onSegmentChange = {}, onFilterChange = {}, onTabSelected = {},
-        onItemClick = {}, onUnblock = {},
+        onItemClick = {}, onMonthClick = {}, onUnblock = {},
     )
 }
 
@@ -536,7 +556,7 @@ private fun HistoryBlockedPreview() = IsFamTheme {
         analysisState = FakeHistoryData.analysis,
         blockedState = FakeHistoryData.blocked,
         onSegmentChange = {}, onFilterChange = {}, onTabSelected = {},
-        onItemClick = {}, onUnblock = {},
+        onItemClick = {}, onMonthClick = {}, onUnblock = {},
     )
 }
 
@@ -548,6 +568,6 @@ private fun HistoryBlockedEmptyPreview() = IsFamTheme {
         analysisState = FakeHistoryData.analysis,
         blockedState = FakeHistoryData.blockedEmpty,
         onSegmentChange = {}, onFilterChange = {}, onTabSelected = {},
-        onItemClick = {}, onUnblock = {},
+        onItemClick = {}, onMonthClick = {}, onUnblock = {},
     )
 }

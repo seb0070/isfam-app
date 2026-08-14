@@ -21,12 +21,19 @@ enum class RiskFilter(val label: String) {
 // ── 32. 분석 기록 ─────────────────────────────────────────────
 
 data class HistoryUiState(
-    val monthLabel: String,
+    val selectedMonth: java.time.YearMonth,
+    val monthOptions: List<MonthOption>,
     val counts: Map<RiskFilter, Int>,
     val selectedFilter: RiskFilter,
     val groups: List<HistoryGroup>,
 ) {
     val isEmpty: Boolean get() = groups.all { it.items.isEmpty() }
+
+    /** 상단에 표시할 짧은 월 라벨 — "7월" */
+    val selectedMonthLabel: String
+        get() = selectedMonth.format(
+            java.time.format.DateTimeFormatter.ofPattern("M월", java.util.Locale.KOREA)
+        )
 }
 
 /** 날짜별 묶음 — "오늘", "어제", "7월 24일" */
@@ -65,8 +72,18 @@ data class BlockedNumber(
 // ── 목 데이터 ─────────────────────────────────────────────────
 
 object FakeHistoryData {
+    private val july = java.time.YearMonth.of(2026, 7)
+
     val analysis = HistoryUiState(
-        monthLabel = "7월",
+        selectedMonth = july,
+        monthOptions = listOf(
+            MonthOption(july, 32),
+            MonthOption(july.minusMonths(1), 28),
+            MonthOption(july.minusMonths(2), 41),
+            MonthOption(july.minusMonths(3), 19),
+            MonthOption(july.minusMonths(4), 24),
+            MonthOption(july.minusMonths(5), 30),
+        ),
         counts = mapOf(
             RiskFilter.All to 32,
             RiskFilter.Safe to 26,
