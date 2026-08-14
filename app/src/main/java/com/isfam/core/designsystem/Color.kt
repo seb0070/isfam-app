@@ -78,5 +78,15 @@ val TabInactiveEnd = Color(0xFFD3C8B8)
 val DashedAvatarBg = Color(0xFFF5F0E8)
 val DashedAvatarBorder = Color(0xFFDDD0BC)
 val CautionBgAlt = Color(0xFFFFF4E0)    // 확인 필요 배지 배경 (목록용)
+// 기록 상세 (33) 전용
+val SegmentDangerLight = Color(0xFFE88A85)  // 위험 구간 (약)
+val SegmentInactive = Color(0xFFE7DED2)     // 미분석 구간
+val MatchBarStart = Color(0xFFF3C0A0)       // 일치도 막대
+val MatchBarEnd = Color(0xFFE08A5B)
+val SpoofBarStart = Color(0xFFF0A9A6)       // 합성 확률 막대
+val SpoofBarEnd = Color(0xFFC93B35)
+val TrustBarStart = Color(0xFF9FBBE6)       // 신뢰도 막대
+val TrustBarEnd = Color(0xFF5D82C9)
+val OutlineWarm = Color(0xFFE4DACB)         // 흰 버튼 테두리
 val Divider = Color(0xFFE7E2DC)
 val White = Color(0xFFFFFFFF)

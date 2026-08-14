@@ -40,6 +40,8 @@ import com.isfam.feature.family.InviteCodeInputRoute
 import com.isfam.feature.family.InvitePreview
 import com.isfam.feature.auth.SignUpSession
 import com.isfam.feature.auth.SignUpRoute
+import com.isfam.core.permission.SettingsIntents
+import com.isfam.feature.history.HistoryDetailRoute
 import com.isfam.feature.history.HistoryRoute
 import com.isfam.feature.history.HistorySegment
 import com.isfam.feature.home.HomeRoute
@@ -47,6 +49,7 @@ import com.isfam.feature.home.MemberStatus
 import com.isfam.feature.home.RegistrationRequestSheet
 import com.isfam.feature.onboarding.OnboardingRoute
 import com.isfam.feature.result.AnalysisResultRoute
+import com.isfam.feature.settings.SettingsRoute
 import com.isfam.feature.onboarding.PermissionRoute
 import com.isfam.feature.splash.SplashRoute
 import com.isfam.feature.voice.VoiceCompleteRoute
@@ -71,7 +74,9 @@ import com.isfam.feature.voice.VoiceRecordRoute
  *   ✅ 19·20 홈 · 등록 요청 시트
  *   ✅ 21·22·23 가족 관리 · 프로필 시트 · 토스트
  *   ✅ 24·25·32 기록 탭 (분석 기록 · 차단 번호)
+ *   ✅ 26 설정
  *   ✅ 28·29·30 분석 결과
+ *   ✅ 33 기록 상세
  *   ⬜ 나머지
  */
 @Composable
@@ -325,7 +330,23 @@ fun IsFamNavHost(
             )
         }
         composable<Route.Settings> {
-            Placeholder("26 설정", navController)
+            val context = androidx.compose.ui.platform.LocalContext.current
+            SettingsRoute(
+                onTabSelected = { tab -> navController.navigateToTab(tab) },
+                onMyInfo = { /* TODO: 내 정보 화면 */ },
+                onVoiceManage = { navController.navigate(Route.VoiceIntro) },
+                onFamilyManage = { navController.navigateToTab(MainTab.Family) },
+                onOpenSystemSettings = {
+                    SettingsIntents.safeStart(context, SettingsIntents.appDetails(context))
+                },
+                onVoiceprintStorage = { /* TODO: 성문 보관 안내 */ },
+                onDeleteAllVoiceData = { /* TODO: 삭제 확인 다이얼로그 */ },
+                onLogout = {
+                    navController.navigate(Route.Login) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                },
+            )
         }
 
         // ── 4. 분석 · 결과 ────────────────────────────────────
@@ -345,8 +366,20 @@ fun IsFamNavHost(
         composable<Route.ShareDanger> {
             Placeholder("31 가족 위험 공유", navController, Route.Home to "홈으로")
         }
-        composable<Route.HistoryDetail> {
-            Placeholder("33 기록 상세", navController, Route.Home to "홈으로")
+        composable<Route.HistoryDetail> { entry ->
+            val args = entry.toRoute<Route.HistoryDetail>()
+            HistoryDetailRoute(
+                analysisId = args.analysisId,
+                onBack = { navController.popBackStack() },
+                onDelete = {
+                    // TODO: DELETE /voice-analyses/{id}
+                    navController.popBackStack()
+                },
+                onReportGuide = { /* TODO: 경찰청 신고 안내 */ },
+                onHome = {
+                    navController.navigate(Route.Home) { popUpTo(Route.Home) }
+                },
+            )
         }
     }
 }

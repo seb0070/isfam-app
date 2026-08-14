@@ -27,10 +27,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.isfam.core.designsystem.Amber500
 import com.isfam.core.designsystem.Danger
 import com.isfam.core.designsystem.Ink
 import com.isfam.core.designsystem.InkFaint
@@ -40,59 +40,69 @@ import com.isfam.core.designsystem.IsFamToggle
 import com.isfam.core.designsystem.MainTab
 import com.isfam.core.designsystem.MainTabScaffold
 import com.isfam.core.designsystem.RowDivider
-import com.isfam.core.designsystem.Safe
 import com.isfam.core.designsystem.SafeBadgeBg
 import com.isfam.core.designsystem.SafeBadgeFg
+import com.isfam.core.designsystem.Tint50
 import com.isfam.core.designsystem.White
 
 /**
  * 26. 설정
  *
- * 권한 상태는 사용자가 OS 설정에서 언제든 바꿀 수 있으므로
- * 화면에 진입할 때마다 실제 상태를 다시 읽어야 합니다.
+ * 구성
+ *   프로필 카드 (이름 · 번호 · 보호 중 배지)
+ *   계정      — 내 정보 / 내 목소리 관리 / 가족 관리
+ *   권한 및 알림 — 자동 분석 마스터 토글 / 마이크 권한 / 위험 알림 / 민감도
+ *   개인정보   — 성문 데이터 관리 / 음성 데이터 전체 삭제
+ *   로그아웃 + 버전
+ *
+ * "음성 데이터 전체 삭제"는 개인정보보호법상 정보주체의 삭제권에
+ * 해당하므로 반드시 노출되어야 합니다.
  */
 data class SettingsUiState(
     val userName: String,
     val phoneNumber: String,
+    val protectionActive: Boolean,
     val voiceRegistered: Boolean,
-    val dangerAlert: Boolean,
-    val familyShareAlert: Boolean,
-    val quietHours: Boolean,
-    val permissions: List<PermissionStatusItem>,
+    val familyCount: Int,
+    /** 통화 종료 후 자동 분석. 끄면 서비스 전체가 멈춥니다. */
+    val autoAnalysis: Boolean,
+    val microphoneGranted: Boolean,
+    val dangerPush: Boolean,
+    val alertSensitivity: AlertSensitivity,
+    val voiceprintStorageLabel: String,
+    val appVersion: String,
 )
 
-data class PermissionStatusItem(
-    val label: String,
-    val granted: Boolean,
-    /** 앱이 확인할 수 없는 항목 (삼성 자동 통화녹음) */
-    val unverifiable: Boolean = false,
-)
+enum class AlertSensitivity(val label: String) {
+    Low("낮음"), Medium("보통"), High("높음"),
+}
 
 object FakeSettingsData {
     val state = SettingsUiState(
         userName = "김서연",
-        phoneNumber = "010 1234 5678",
+        phoneNumber = "010-2847-1123",
+        protectionActive = true,
         voiceRegistered = true,
-        dangerAlert = true,
-        familyShareAlert = true,
-        quietHours = false,
-        permissions = listOf(
-            PermissionStatusItem("통화 녹음 파일 접근", true),
-            PermissionStatusItem("통화 상태 확인", true),
-            PermissionStatusItem("알림", true),
-            PermissionStatusItem("배터리 최적화 예외", false),
-            PermissionStatusItem("자동 통화녹음", true, unverifiable = true),
-        ),
+        familyCount = 5,
+        autoAnalysis = true,
+        microphoneGranted = true,
+        dangerPush = true,
+        alertSensitivity = AlertSensitivity.High,
+        voiceprintStorageLabel = "암호화 보관",
+        appVersion = "v1.2.0",
     )
 }
 
 @Composable
 fun SettingsRoute(
     onTabSelected: (MainTab) -> Unit,
-    onReRegisterVoice: () -> Unit,
+    onMyInfo: () -> Unit,
+    onVoiceManage: () -> Unit,
+    onFamilyManage: () -> Unit,
     onOpenSystemSettings: () -> Unit,
+    onVoiceprintStorage: () -> Unit,
+    onDeleteAllVoiceData: () -> Unit,
     onLogout: () -> Unit,
-    onWithdraw: () -> Unit,
 ) {
     // TODO: Repository + PermissionChecker 연결 시 교체
     var state by remember { mutableStateOf(FakeSettingsData.state) }
@@ -100,13 +110,24 @@ fun SettingsRoute(
     SettingsScreen(
         state = state,
         onTabSelected = onTabSelected,
-        onDangerAlertChange = { state = state.copy(dangerAlert = it) },
-        onFamilyShareChange = { state = state.copy(familyShareAlert = it) },
-        onQuietHoursChange = { state = state.copy(quietHours = it) },
-        onReRegisterVoice = onReRegisterVoice,
+        onAutoAnalysisChange = { state = state.copy(autoAnalysis = it) },
+        onDangerPushChange = { state = state.copy(dangerPush = it) },
+        onSensitivityClick = {
+            state = state.copy(
+                alertSensitivity = when (state.alertSensitivity) {
+                    AlertSensitivity.Low -> AlertSensitivity.Medium
+                    AlertSensitivity.Medium -> AlertSensitivity.High
+                    AlertSensitivity.High -> AlertSensitivity.Low
+                }
+            )
+        },
+        onMyInfo = onMyInfo,
+        onVoiceManage = onVoiceManage,
+        onFamilyManage = onFamilyManage,
         onOpenSystemSettings = onOpenSystemSettings,
+        onVoiceprintStorage = onVoiceprintStorage,
+        onDeleteAllVoiceData = onDeleteAllVoiceData,
         onLogout = onLogout,
-        onWithdraw = onWithdraw,
     )
 }
 
@@ -114,13 +135,16 @@ fun SettingsRoute(
 fun SettingsScreen(
     state: SettingsUiState,
     onTabSelected: (MainTab) -> Unit,
-    onDangerAlertChange: (Boolean) -> Unit,
-    onFamilyShareChange: (Boolean) -> Unit,
-    onQuietHoursChange: (Boolean) -> Unit,
-    onReRegisterVoice: () -> Unit,
+    onAutoAnalysisChange: (Boolean) -> Unit,
+    onDangerPushChange: (Boolean) -> Unit,
+    onSensitivityClick: () -> Unit,
+    onMyInfo: () -> Unit,
+    onVoiceManage: () -> Unit,
+    onFamilyManage: () -> Unit,
     onOpenSystemSettings: () -> Unit,
+    onVoiceprintStorage: () -> Unit,
+    onDeleteAllVoiceData: () -> Unit,
     onLogout: () -> Unit,
-    onWithdraw: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     MainTabScaffold(
@@ -141,70 +165,85 @@ fun SettingsScreen(
                 color = Ink,
             )
 
-            Spacer(Modifier.height(18.dp))
-            ProfileCard(state, onReRegisterVoice)
+            Spacer(Modifier.height(16.dp))
+            ProfileCard(state)
 
-            Spacer(Modifier.height(18.dp))
-            SectionLabel("알림")
-            Spacer(Modifier.height(8.dp))
-            SettingsCard {
-                ToggleRow("위험 감지 알림", "위험 판정 시 즉시 알려드려요",
-                    state.dangerAlert, onDangerAlertChange)
-                RowLine()
-                ToggleRow("가족 공유 알림", "가족이 위험 번호를 공유하면 알려드려요",
-                    state.familyShareAlert, onFamilyShareChange)
-                RowLine()
-                ToggleRow("방해 금지 시간", "밤 10시 ~ 오전 7시에는 알림을 미뤄요",
-                    state.quietHours, onQuietHoursChange)
-            }
-
-            Spacer(Modifier.height(18.dp))
-            SectionLabel("권한 상태")
-            Spacer(Modifier.height(8.dp))
-            SettingsCard {
-                state.permissions.forEachIndexed { index, item ->
-                    PermissionRow(item)
-                    if (index < state.permissions.lastIndex) RowLine()
-                }
-            }
-            Spacer(Modifier.height(10.dp))
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(White)
-                    .clickable(onClick = onOpenSystemSettings)
-                    .padding(horizontal = 18.dp, vertical = 15.dp),
-            ) {
-                Text(
-                    "시스템 설정 열기",
-                    style = MaterialTheme.typography.titleMedium.copy(fontSize = 14.sp),
-                    color = Amber500,
-                )
-            }
-
-            Spacer(Modifier.height(18.dp))
+            // ── 계정 ──────────────────────────────────────────
+            Spacer(Modifier.height(20.dp))
             SectionLabel("계정")
             Spacer(Modifier.height(8.dp))
             SettingsCard {
-                LinkRow("개인정보 처리방침") { }
+                ValueRow("내 정보", state.userName, onMyInfo)
                 RowLine()
-                LinkRow("서비스 이용약관") { }
+                ValueRow(
+                    "내 목소리 관리",
+                    if (state.voiceRegistered) "등록 완료" else "미등록",
+                    onVoiceManage,
+                )
                 RowLine()
-                LinkRow("로그아웃", onClick = onLogout)
+                ValueRow("가족 관리", "${state.familyCount}명", onFamilyManage)
+            }
+
+            // ── 권한 및 알림 ──────────────────────────────────
+            Spacer(Modifier.height(20.dp))
+            SectionLabel("권한 및 알림")
+            Spacer(Modifier.height(8.dp))
+            SettingsCard {
+                ToggleRow(
+                    "통화 종료 후 자동 분석",
+                    state.autoAnalysis,
+                    onAutoAnalysisChange,
+                )
                 RowLine()
-                LinkRow("회원 탈퇴", danger = true, onClick = onWithdraw)
+                ValueRow(
+                    "마이크 권한",
+                    if (state.microphoneGranted) "허용됨" else "필요",
+                    onOpenSystemSettings,
+                )
+                RowLine()
+                ToggleRow("위험 알림 푸시", state.dangerPush, onDangerPushChange)
+                RowLine()
+                ValueRow("알림 민감도", state.alertSensitivity.label, onSensitivityClick)
+            }
+
+            // ── 개인정보 ──────────────────────────────────────
+            Spacer(Modifier.height(20.dp))
+            SectionLabel("개인정보")
+            Spacer(Modifier.height(8.dp))
+            SettingsCard {
+                ValueRow(
+                    "성문 데이터 관리",
+                    state.voiceprintStorageLabel,
+                    onVoiceprintStorage,
+                )
+                RowLine()
+                // 개인정보보호법상 정보주체의 삭제권. 반드시 노출되어야 합니다.
+                ValueRow("음성 데이터 전체 삭제", null, onDeleteAllVoiceData)
+            }
+
+            // ── 로그아웃 ──────────────────────────────────────
+            Spacer(Modifier.height(20.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 4.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    "로그아웃",
+                    style = MaterialTheme.typography.titleMedium.copy(fontSize = 14.sp),
+                    color = Danger,
+                    modifier = Modifier.clickable(onClick = onLogout),
+                )
+                Text(
+                    state.appVersion,
+                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                    color = InkFaint,
+                )
             }
 
             Spacer(Modifier.height(24.dp))
-            Text(
-                "IsFam 0.1.0",
-                style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
-                color = InkFaint,
-                modifier = Modifier.fillMaxWidth(),
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-            )
-            Spacer(Modifier.height(20.dp))
         }
     }
 }
@@ -212,81 +251,55 @@ fun SettingsScreen(
 // ── 프로필 ────────────────────────────────────────────────────
 
 @Composable
-private fun ProfileCard(state: SettingsUiState, onReRegister: () -> Unit) {
-    Column(
+private fun ProfileCard(state: SettingsUiState) {
+    Row(
         modifier = Modifier
             .fillMaxWidth()
             .shadow(5.dp, RoundedCornerShape(22.dp), clip = false)
             .clip(RoundedCornerShape(22.dp))
             .background(White)
-            .padding(18.dp),
+            .padding(horizontal = 18.dp, vertical = 18.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(13.dp),
+        Box(
+            modifier = Modifier
+                .size(48.dp)
+                .clip(CircleShape)
+                .background(Tint50),
+            contentAlignment = Alignment.Center,
         ) {
-            Box(
-                modifier = Modifier
-                    .size(48.dp)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(Safe),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    state.userName.take(1),
-                    style = MaterialTheme.typography.headlineMedium.copy(fontSize = 17.sp),
-                    color = White,
-                )
-            }
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    state.userName,
-                    style = MaterialTheme.typography.titleMedium.copy(fontSize = 16.sp),
-                    color = Ink,
-                )
-                Spacer(Modifier.height(3.dp))
-                Text(
-                    state.phoneNumber,
-                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.5.sp),
-                    color = InkMuted,
-                )
-            }
+            Text(
+                state.userName.take(1),
+                style = MaterialTheme.typography.headlineMedium.copy(fontSize = 17.sp),
+                color = Ink,
+            )
         }
 
-        Spacer(Modifier.height(14.dp))
-        RowLine()
-        Spacer(Modifier.height(14.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column {
-                Text(
-                    "내 목소리",
-                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
-                    color = Ink,
-                )
-                Spacer(Modifier.height(3.dp))
-                Box(
-                    modifier = Modifier
-                        .clip(CircleShape)
-                        .background(SafeBadgeBg)
-                        .padding(horizontal = 10.dp, vertical = 5.dp),
-                ) {
-                    Text(
-                        if (state.voiceRegistered) "등록 완료" else "미등록",
-                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
-                        color = SafeBadgeFg,
-                    )
-                }
-            }
+        Column(modifier = Modifier.weight(1f)) {
             Text(
-                "다시 등록 ›",
-                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
-                color = Amber500,
-                modifier = Modifier.clickable(onClick = onReRegister),
+                state.userName,
+                style = MaterialTheme.typography.titleMedium.copy(fontSize = 16.sp),
+                color = Ink,
+            )
+            Spacer(Modifier.height(3.dp))
+            Text(
+                state.phoneNumber,
+                style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.5.sp),
+                color = InkMuted,
+            )
+        }
+
+        Box(
+            modifier = Modifier
+                .clip(CircleShape)
+                .background(SafeBadgeBg)
+                .padding(horizontal = 11.dp, vertical = 6.dp),
+        ) {
+            Text(
+                if (state.protectionActive) "보호 중" else "중지됨",
+                style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                color = SafeBadgeFg,
             )
         }
     }
@@ -309,8 +322,8 @@ private fun SettingsCard(content: @Composable () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .shadow(5.dp, RoundedCornerShape(22.dp), clip = false)
-            .clip(RoundedCornerShape(22.dp))
+            .shadow(5.dp, RoundedCornerShape(20.dp), clip = false)
+            .clip(RoundedCornerShape(20.dp))
             .background(White),
     ) { content() }
 }
@@ -320,70 +333,11 @@ private fun RowLine() {
     Box(Modifier.fillMaxWidth().height(1.dp).background(RowDivider))
 }
 
+/** 라벨 + 값 + › */
 @Composable
-private fun ToggleRow(
+private fun ValueRow(
     title: String,
-    description: String,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 15.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                title,
-                style = MaterialTheme.typography.titleMedium.copy(fontSize = 14.5.sp),
-                color = Ink,
-            )
-            Spacer(Modifier.height(3.dp))
-            Text(
-                description,
-                style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
-                color = InkMuted,
-            )
-        }
-        Spacer(Modifier.size(12.dp))
-        IsFamToggle(checked = checked, onCheckedChange = onCheckedChange)
-    }
-}
-
-@Composable
-private fun PermissionRow(item: PermissionStatusItem) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 14.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                item.label,
-                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
-                color = Ink,
-            )
-            if (item.unverifiable) {
-                Spacer(Modifier.height(3.dp))
-                Text(
-                    // 앱이 삼성 전화 앱 설정을 읽을 수 없다는 점을 사용자에게 알립니다
-                    "첫 통화 후 자동으로 확인됩니다",
-                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
-                    color = InkFaint,
-                )
-            }
-        }
-        Text(
-            if (item.granted) "허용됨" else "필요",
-            style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.5.sp),
-            color = if (item.granted) SafeBadgeFg else Amber500,
-        )
-    }
-}
-
-@Composable
-private fun LinkRow(
-    title: String,
-    danger: Boolean = false,
+    value: String?,
     onClick: () -> Unit,
 ) {
     Row(
@@ -396,20 +350,52 @@ private fun LinkRow(
     ) {
         Text(
             title,
-            style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
-            color = if (danger) Danger else Ink,
+            style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.5.sp),
+            color = Ink,
+            modifier = Modifier.weight(1f),
         )
+        if (value != null) {
+            Text(
+                value,
+                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
+                color = InkMuted,
+            )
+            Spacer(Modifier.size(6.dp))
+        }
         Text("›", style = MaterialTheme.typography.titleMedium, color = InkFaint)
     }
 }
 
-@Preview(showBackground = true, widthDp = 390, heightDp = 1000)
+/** 라벨 + 토글 */
+@Composable
+private fun ToggleRow(
+    title: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 13.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            title,
+            style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.5.sp),
+            color = Ink,
+            modifier = Modifier.weight(1f),
+        )
+        IsFamToggle(checked = checked, onCheckedChange = onCheckedChange)
+    }
+}
+
+@Preview(showBackground = true, widthDp = 390, heightDp = 844)
 @Composable
 private fun SettingsPreview() = IsFamTheme {
     SettingsScreen(
         state = FakeSettingsData.state,
-        onTabSelected = {}, onDangerAlertChange = {}, onFamilyShareChange = {},
-        onQuietHoursChange = {}, onReRegisterVoice = {}, onOpenSystemSettings = {},
-        onLogout = {}, onWithdraw = {},
+        onTabSelected = {}, onAutoAnalysisChange = {}, onDangerPushChange = {},
+        onSensitivityClick = {}, onMyInfo = {}, onVoiceManage = {},
+        onFamilyManage = {}, onOpenSystemSettings = {}, onVoiceprintStorage = {},
+        onDeleteAllVoiceData = {}, onLogout = {},
     )
 }
