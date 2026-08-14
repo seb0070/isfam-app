@@ -22,6 +22,12 @@ import androidx.navigation.toRoute
 import com.isfam.core.designsystem.IsFamButton
 import com.isfam.core.designsystem.IsFamOutlinedButton
 import com.isfam.feature.auth.LoginRoute
+import com.isfam.feature.family.FamilyCreateRoute
+import com.isfam.feature.family.FamilyEntryRoute
+import com.isfam.feature.family.FamilyInviteRoute
+import com.isfam.feature.family.InviteAcceptRoute
+import com.isfam.feature.family.InviteCodeInputRoute
+import com.isfam.feature.family.InvitePreview
 import com.isfam.feature.auth.SignUpSession
 import com.isfam.feature.auth.SignUpRoute
 import com.isfam.feature.onboarding.OnboardingRoute
@@ -45,6 +51,7 @@ import com.isfam.feature.voice.VoiceRecordRoute
  *   ✅ 05 로그인 · 06 회원가입 · 07 OTP
  *   ✅ 08 권한
  *   ✅ 09·10·11·12 목소리 등록
+ *   ✅ 13·14·15·16·17·18 가족 공간 · 초대
  *   ⬜ 나머지
  */
 @Composable
@@ -160,30 +167,64 @@ fun IsFamNavHost(
             )
         }
         composable<Route.FamilyEntry> {
-            Placeholder(
-                "13 가족 공간 진입 선택", navController,
-                Route.FamilyCreate to "새로운 가족 공간 만들기",
-                Route.InviteCodeInput to "초대 코드로 참여하기",
+            FamilyEntryRoute(
+                onCreate = { navController.navigate(Route.FamilyCreate) },
+                onJoin = { navController.navigate(Route.InviteCodeInput) },
             )
         }
         composable<Route.FamilyCreate> {
-            Placeholder("14 가족 공간 만들기", navController, Route.FamilyInvite to "만들고 초대하기")
+            FamilyCreateRoute(
+                ownerName = signUpSession.userName.ifBlank { "회원" },
+                onCreated = { navController.navigate(Route.FamilyInvite) },
+                onBack = { navController.popBackStack() },
+            )
         }
         composable<Route.FamilyInvite> {
-            Placeholder("15 가족 초대", navController, Route.Home to "나중에 초대하고 홈으로")
+            FamilyInviteRoute(
+                // TODO: POST /api/v1/family/invite-code 응답으로 교체
+                inviteCode = "F7K2M9",
+                expiresInText = "유효시간 23시간 58분 남음",
+                onSkip = {
+                    navController.navigate(Route.Home) {
+                        popUpTo(Route.FamilyEntry) { inclusive = true }
+                    }
+                },
+                onBack = { navController.popBackStack() },
+            )
         }
         composable<Route.FamilyInviteManage> {
-            Placeholder("16 가족 초대 · 현황", navController)
+            FamilyInviteRoute(
+                inviteCode = "F7K2M9",
+                expiresInText = "유효시간 23시간 58분 남음",
+                isReentry = true,
+                onSkip = null,
+                onBack = { navController.popBackStack() },
+            )
         }
         composable<Route.InviteCodeInput> {
-            Placeholder(
-                "17 초대 코드 입력", navController,
-                Route.InviteAccept("F7K-2M9") to "가족으로 연결하기",
+            InviteCodeInputRoute(
+                onVerified = { code -> navController.navigate(Route.InviteAccept(code)) },
+                onBack = { navController.popBackStack() },
             )
         }
         composable<Route.InviteAccept> { entry ->
             val args = entry.toRoute<Route.InviteAccept>()
-            Placeholder("18 초대 수락\n${args.inviteCode}", navController, Route.VoiceIntro to "수락하고 목소리 등록")
+            InviteAcceptRoute(
+                // TODO: GET /api/v1/invitations/{code} 응답으로 교체
+                preview = InvitePreview(
+                    inviterName = "김상호",
+                    spaceName = "김서연님의 가족 공간",
+                    memberInitials = listOf("상", "서"),
+                    enteredByLink = args.inviteCode.isBlank(),
+                ),
+                myInitial = signUpSession.displayName.take(1).ifBlank { "나" },
+                onAccepted = {
+                    navController.navigate(Route.VoiceIntro) {
+                        popUpTo(Route.FamilyEntry) { inclusive = true }
+                    }
+                },
+                onDecline = { navController.popBackStack() },
+            )
         }
 
         // ── 3. 메인 ───────────────────────────────────────────

@@ -13,6 +13,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.unit.em
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
@@ -451,3 +454,340 @@ fun FieldHelper(
         modifier = modifier.padding(start = 6.dp, top = 6.dp),
     )
 }
+
+// ══════════════════════════════════════════════════════════════
+//  가족 · 초대 관련 컴포넌트
+// ══════════════════════════════════════════════════════════════
+
+/**
+ * 선택 카드. 13번 가족 공간 진입 선택에 사용합니다.
+ * 강조된 카드는 앰버 1.5dp 테두리가 붙습니다.
+ */
+@Composable
+fun SelectionCard(
+    title: String,
+    description: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    highlighted: Boolean = false,
+    eyebrow: String? = null,
+) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .shadow(if (highlighted) 8.dp else 5.dp, RoundedCornerShape(24.dp), clip = false)
+            .clip(RoundedCornerShape(24.dp))
+            .background(White)
+            .then(
+                if (highlighted) Modifier.border(1.5.dp, Amber500, RoundedCornerShape(24.dp))
+                else Modifier
+            )
+            .clickable(onClick = onClick)
+            .padding(20.dp),
+    ) {
+        Row(verticalAlignment = Alignment.Top) {
+            Column(modifier = Modifier.weight(1f)) {
+                if (eyebrow != null) {
+                    Text(eyebrow, style = MaterialTheme.typography.labelMedium, color = Amber500)
+                    Spacer(Modifier.height(7.dp))
+                }
+                Text(
+                    title,
+                    style = MaterialTheme.typography.headlineMedium.copy(fontSize = 18.sp),
+                    color = Ink,
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    description,
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        fontSize = 13.sp, lineHeight = 21.sp,
+                    ),
+                    color = InkBody2,
+                )
+            }
+            Spacer(Modifier.size(10.dp))
+            Text(
+                "›",
+                style = MaterialTheme.typography.titleMedium.copy(fontSize = 16.sp),
+                color = if (highlighted) Amber500 else InkPlaceholder,
+            )
+        }
+    }
+}
+
+/** 코드·링크를 보여주고 복사할 수 있는 행 */
+@Composable
+fun CopyableRow(
+    label: String,
+    value: String,
+    onCopy: () -> Unit,
+    modifier: Modifier = Modifier,
+    valueLarge: Boolean = false,
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(if (valueLarge) 16.dp else 14.dp))
+            .background(ScreenBg)
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            if (valueLarge) {
+                Text(
+                    label,
+                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                    color = LabelBrown,
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    value,
+                    style = MaterialTheme.typography.headlineMedium.copy(
+                        fontSize = 21.sp, letterSpacing = 0.08.em,
+                    ),
+                    color = Ink,
+                )
+            } else {
+                Text(
+                    value,
+                    style = MaterialTheme.typography.titleMedium.copy(fontSize = 13.sp),
+                    color = Ink,
+                )
+            }
+        }
+        Box(
+            modifier = Modifier
+                .clip(CircleShape)
+                .background(DisabledBg)
+                .clickable(onClick = onCopy)
+                .padding(horizontal = 12.dp, vertical = if (valueLarge) 8.dp else 7.dp),
+        ) {
+            Text(
+                "복사",
+                style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                color = InkBody2,
+            )
+        }
+    }
+}
+
+/** 카카오톡 공유 버튼 */
+@Composable
+fun KakaoShareButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(52.dp)
+            .shadow(8.dp, RoundedCornerShape(16.dp), clip = false)
+            .clip(RoundedCornerShape(16.dp))
+            .background(KakaoYellow)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(9.dp),
+        ) {
+            Box(
+                modifier = Modifier.size(20.dp).clip(RoundedCornerShape(7.dp)).background(Ink)
+            )
+            Text(text, style = MaterialTheme.typography.labelLarge, color = Ink)
+        }
+    }
+}
+
+/** 이니셜 아바타. 등록 완료는 앰버, 미등록은 점선 테두리 */
+@Composable
+fun InitialAvatar(
+    initial: String,
+    modifier: Modifier = Modifier,
+    size: androidx.compose.ui.unit.Dp = 64.dp,
+    registered: Boolean = true,
+) {
+    val radius = (size.value * 0.34f).dp
+    Box(
+        modifier = modifier
+            .size(size)
+            .clip(RoundedCornerShape(radius))
+            .then(
+                if (registered)
+                    Modifier.background(Brush.linearGradient(listOf(Honey300, Amber500)))
+                else
+                    Modifier.background(White).border(1.dp, DashedBorder, RoundedCornerShape(radius))
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            initial,
+            style = MaterialTheme.typography.headlineMedium.copy(fontSize = (size.value * 0.34f).sp),
+            color = if (registered) White else InkPlaceholder,
+        )
+    }
+}
+
+/** 라벨 : 값 한 줄. 정보 카드 안에 반복됩니다. */
+@Composable
+fun InfoRow(
+    label: String,
+    modifier: Modifier = Modifier,
+    value: String? = null,
+    trailing: @Composable (() -> Unit)? = null,
+) {
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            label,
+            style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
+            color = InkMuted,
+        )
+        if (value != null) {
+            Text(
+                value,
+                style = MaterialTheme.typography.titleMedium.copy(fontSize = 14.sp),
+                color = Ink,
+            )
+        }
+        trailing?.invoke()
+    }
+}
+
+/**
+ * 초대 코드 입력. 영숫자 6자리를 3-3 으로 나눠 표시합니다.
+ *   F 7 K – 2 M 9
+ *
+ * OtpInput 과 달리 대문자 영문도 받습니다.
+ */
+@Composable
+fun InviteCodeInput(
+    value: String,
+    onValueChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    BasicTextField(
+        value = value,
+        onValueChange = { raw ->
+            val cleaned = raw.uppercase().filter { it.isLetterOrDigit() }.take(6)
+            onValueChange(cleaned)
+        },
+        keyboardOptions = KeyboardOptions(
+            keyboardType = KeyboardType.Text,
+            capitalization = androidx.compose.ui.text.input.KeyboardCapitalization.Characters,
+        ),
+        modifier = modifier.fillMaxWidth(),
+        decorationBox = {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(7.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                repeat(6) { index ->
+                    CodeBox(
+                        char = value.getOrNull(index),
+                        focused = index == value.length,
+                        modifier = Modifier.weight(1f),
+                    )
+                    if (index == 2) {
+                        Text(
+                            "–",
+                            style = MaterialTheme.typography.headlineMedium.copy(fontSize = 22.sp),
+                            color = InkPlaceholder,
+                            modifier = Modifier.padding(horizontal = 2.dp),
+                        )
+                    }
+                }
+            }
+        },
+    )
+}
+
+@Composable
+private fun CodeBox(
+    char: Char?,
+    focused: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val filled = char != null
+    Box(
+        modifier = modifier
+            .height(62.dp)
+            .then(
+                if (filled || focused)
+                    Modifier.shadow(5.dp, RoundedCornerShape(16.dp), clip = false)
+                else Modifier
+            )
+            .clip(RoundedCornerShape(16.dp))
+            .background(if (filled || focused) White else CodeEmptyBg)
+            .then(
+                if (focused) Modifier.border(2.dp, Amber500, RoundedCornerShape(16.dp))
+                else Modifier
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (char != null) {
+            Text(
+                char.toString(),
+                style = MaterialTheme.typography.headlineMedium.copy(fontSize = 24.sp),
+                color = Ink,
+            )
+        }
+    }
+}
+
+/**
+ * QR 코드 자리.
+ *
+ * 실제 QR 생성에는 ZXing 이 필요합니다.
+ *   libs.versions.toml:  zxing = { group = "com.google.zxing", name = "core", version = "3.5.3" }
+ *   app/build.gradle.kts: implementation(libs.zxing)
+ *
+ * 의존성을 추가한 뒤 아래 주석의 generateQrBitmap 을 사용하세요.
+ */
+@Composable
+fun QrCodePlaceholder(
+    content: String,
+    modifier: Modifier = Modifier,
+    size: androidx.compose.ui.unit.Dp = 196.dp,
+) {
+    // val bitmap = remember(content, size) { generateQrBitmap(content, size) }
+    // Image(bitmap.asImageBitmap(), contentDescription = "초대 QR",
+    //       modifier = modifier.size(size))
+
+    Box(
+        modifier = modifier
+            .size(size)
+            .clip(RoundedCornerShape(12.dp))
+            .background(ScreenBg),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text("QR", style = MaterialTheme.typography.headlineMedium, color = InkPlaceholder)
+            Spacer(Modifier.height(4.dp))
+            Text(
+                content,
+                style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp),
+                color = InkPlaceholder,
+            )
+        }
+    }
+}
+
+/*
+ * ZXing 을 추가한 뒤 사용할 QR 생성 함수
+ *
+ * private fun generateQrBitmap(content: String, size: Dp): Bitmap {
+ *     val px = size.value.toInt() * 3
+ *     val matrix = QRCodeWriter().encode(content, BarcodeFormat.QR_CODE, px, px)
+ *     val bmp = Bitmap.createBitmap(px, px, Bitmap.Config.RGB_565)
+ *     for (x in 0 until px) for (y in 0 until px) {
+ *         bmp.setPixel(x, y, if (matrix[x, y]) android.graphics.Color.BLACK
+ *                            else android.graphics.Color.WHITE)
+ *     }
+ *     return bmp
+ * }
+ */
