@@ -9,7 +9,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -22,6 +25,7 @@ import androidx.navigation.toRoute
 import com.isfam.core.designsystem.IsFamButton
 import com.isfam.core.designsystem.IsFamOutlinedButton
 import com.isfam.feature.auth.LoginRoute
+import com.isfam.core.designsystem.MainTab
 import com.isfam.feature.family.FamilyCreateRoute
 import com.isfam.feature.family.FamilyEntryRoute
 import com.isfam.feature.family.FamilyInviteRoute
@@ -30,6 +34,9 @@ import com.isfam.feature.family.InviteCodeInputRoute
 import com.isfam.feature.family.InvitePreview
 import com.isfam.feature.auth.SignUpSession
 import com.isfam.feature.auth.SignUpRoute
+import com.isfam.feature.home.HomeRoute
+import com.isfam.feature.home.MemberStatus
+import com.isfam.feature.home.RegistrationRequestSheet
 import com.isfam.feature.onboarding.OnboardingRoute
 import com.isfam.feature.onboarding.PermissionRoute
 import com.isfam.feature.splash.SplashRoute
@@ -52,6 +59,7 @@ import com.isfam.feature.voice.VoiceRecordRoute
  *   ✅ 08 권한
  *   ✅ 09·10·11·12 목소리 등록
  *   ✅ 13·14·15·16·17·18 가족 공간 · 초대
+ *   ✅ 19·20 홈 · 등록 요청 시트
  *   ⬜ 나머지
  */
 @Composable
@@ -229,13 +237,26 @@ fun IsFamNavHost(
 
         // ── 3. 메인 ───────────────────────────────────────────
         composable<Route.Home> {
-            Placeholder(
-                "19 홈 대시보드", navController,
-                Route.FamilyManage to "가족",
-                Route.History to "기록",
-                Route.Settings to "설정",
-                Route.Analyzing(1) to "[테스트] 분석 중",
+            var sheetMember by remember { mutableStateOf<MemberStatus?>(null) }
+
+            HomeRoute(
+                onTabSelected = { tab -> navController.navigateToTab(tab) },
+                onAnalysisClick = { id -> navController.navigate(Route.AnalysisResult(id)) },
+                onInvite = { navController.navigate(Route.FamilyInviteManage) },
+                onBlockedNumbers = { navController.navigate(Route.BlockedNumbers) },
+                onRequestRegistration = { sheetMember = it },
+                onSeeAllHistory = { navController.navigate(Route.History) },
             )
+
+            // 20. 등록 요청 바텀시트
+            sheetMember?.let { member ->
+                RegistrationRequestSheet(
+                    member = member,
+                    onKakaoRequest = { sheetMember = null },   // TODO: 카카오 SDK
+                    onPushRequest = { sheetMember = null },    // TODO: 서버 알림 발송
+                    onDismiss = { sheetMember = null },
+                )
+            }
         }
         composable<Route.FamilyManage> {
             Placeholder(
@@ -271,6 +292,24 @@ fun IsFamNavHost(
         composable<Route.HistoryDetail> {
             Placeholder("33 기록 상세", navController, Route.Home to "홈으로")
         }
+    }
+}
+
+/**
+ * 하단 탭 이동.
+ * 탭 사이를 오갈 때 백스택이 쌓이지 않도록 홈까지 정리합니다.
+ */
+private fun NavHostController.navigateToTab(tab: MainTab) {
+    val route: Route = when (tab) {
+        MainTab.Home -> Route.Home
+        MainTab.Family -> Route.FamilyManage
+        MainTab.History -> Route.History
+        MainTab.Settings -> Route.Settings
+    }
+    navigate(route) {
+        popUpTo(Route.Home) { saveState = true }
+        launchSingleTop = true
+        restoreState = true
     }
 }
 
