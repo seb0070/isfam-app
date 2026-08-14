@@ -791,3 +791,136 @@ fun QrCodePlaceholder(
  *     return bmp
  * }
  */
+
+// ══════════════════════════════════════════════════════════════
+//  토글 · 토스트
+// ══════════════════════════════════════════════════════════════
+
+/**
+ * 스위치 토글.
+ * UI 키트 실측값 — 46×28 · radius 15 · 노브 22 · 여백 3
+ */
+@Composable
+fun IsFamToggle(
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val offset by androidx.compose.animation.core.animateDpAsState(
+        targetValue = if (checked) 21.dp else 3.dp,
+        animationSpec = androidx.compose.animation.core.tween(180),
+        label = "toggleKnob",
+    )
+
+    Box(
+        modifier = modifier
+            .size(width = 46.dp, height = 28.dp)
+            .clip(RoundedCornerShape(15.dp))
+            .background(if (checked) Amber500 else ToggleOff)
+            .clickable { onCheckedChange(!checked) },
+    ) {
+        Box(
+            modifier = Modifier
+                .padding(start = offset, top = 3.dp)
+                .size(22.dp)
+                .clip(CircleShape)
+                .background(White),
+        )
+    }
+}
+
+/**
+ * 다크 토스트.
+ * UI 키트 실측값 — rgba(23,19,15,.94) · radius 18 · padding 15/18
+ */
+@Composable
+fun IsFamToast(
+    message: String,
+    modifier: Modifier = Modifier,
+    iconText: String = "!",
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .shadow(14.dp, RoundedCornerShape(18.dp), clip = false)
+            .clip(RoundedCornerShape(18.dp))
+            .background(Ink.copy(alpha = 0.94f))
+            .padding(horizontal = 18.dp, vertical = 15.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(11.dp),
+    ) {
+        Box(
+            modifier = Modifier.size(22.dp).clip(CircleShape).background(Honey300),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                iconText,
+                style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                color = Ink,
+            )
+        }
+        Text(
+            message,
+            style = MaterialTheme.typography.bodyMedium.copy(
+                fontSize = 13.sp, lineHeight = 20.sp,
+            ),
+            color = White,
+        )
+    }
+}
+
+/** 목소리 등록 상태 배지 */
+@Composable
+fun RegistrationBadge(
+    registered: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    if (registered) {
+        Box(
+            modifier = modifier
+                .clip(CircleShape)
+                .background(SafeBadgeBg)
+                .padding(horizontal = 11.dp, vertical = 6.dp),
+        ) {
+            Text(
+                "등록 완료",
+                style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                color = SafeBadgeFg,
+            )
+        }
+    } else {
+        Box(
+            modifier = modifier
+                .clip(CircleShape)
+                .background(Amber500)
+                .padding(horizontal = 11.dp, vertical = 7.dp),
+        ) {
+            Text(
+                "알림",
+                style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                color = White,
+            )
+        }
+    }
+}
+
+/** 이름 옆 역할 태그 — "관리자", "나" */
+@Composable
+fun RoleTag(
+    text: String,
+    modifier: Modifier = Modifier,
+    highlighted: Boolean = false,
+) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(6.dp))
+            .background(if (highlighted) Tint50 else RowDivider)
+            .padding(horizontal = 7.dp, vertical = 3.dp),
+    ) {
+        Text(
+            text,
+            style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+            color = if (highlighted) Amber700 else InkBody2,
+        )
+    }
+}
