@@ -26,6 +26,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -56,6 +57,11 @@ import com.isfam.core.designsystem.ProcessingEnd
 import com.isfam.core.designsystem.Safe
 import com.isfam.core.designsystem.White
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import com.isfam.core.ml.VoiceprintEnrollmentService
+import com.isfam.core.rememberAppContainer
+import java.io.File
 
 /**
  * 11. 성문 생성 중
@@ -76,25 +82,38 @@ enum class ProcessingStep(val label: String) {
 }
 
 @Composable
-fun VoiceProcessingRoute(onComplete: () -> Unit) {
+fun VoiceProcessingRoute(
+    audioFiles: List<File>,
+    onComplete: () -> Unit,
+) {
+    val container = rememberAppContainer()
     var doneCount by remember { mutableIntStateOf(0) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
 
-    LaunchedEffect(Unit) {
-        // TODO: POST /api/v1/family/register 업로드 진행률과 연동
-        delay(900); doneCount = 1
-        delay(900); doneCount = 2
-        delay(1400); doneCount = 3
-        delay(700); doneCount = 4
-        delay(400)
-        onComplete()
+    LaunchedEffect(audioFiles) {
+        runCatching {
+            require(audioFiles.isNotEmpty()) { "등록된 녹음 파일이 없습니다." }
+            doneCount = 1
+            val service = container.voiceprintEnrollmentService
+            withContext(Dispatchers.Default) {
+                service.enroll(VoiceprintEnrollmentService.OWNER_PROFILE_ID, audioFiles)
+            }
+            doneCount = 4
+        }.onSuccess {
+            delay(300)
+            onComplete()
+        }.onFailure { error ->
+            errorMessage = error.message ?: "성문을 만들지 못했습니다. 다시 녹음해 주세요."
+        }
     }
 
-    VoiceProcessingScreen(doneCount = doneCount)
+    VoiceProcessingScreen(doneCount = doneCount, errorMessage = errorMessage)
 }
 
 @Composable
 fun VoiceProcessingScreen(
     doneCount: Int,
+    errorMessage: String? = null,
     modifier: Modifier = Modifier,
 ) {
     val progress = doneCount / ProcessingStep.entries.size.toFloat()
@@ -145,11 +164,11 @@ fun VoiceProcessingScreen(
             )
             Spacer(Modifier.height(10.dp))
             Text(
-                "잠시만 기다려 주세요. 보통 10초 이내에 끝나요.",
+                errorMessage ?: "잠시만 기다려 주세요. 보통 10초 이내에 끝나요.",
                 style = MaterialTheme.typography.bodyMedium.copy(
                     fontSize = 13.5.sp, lineHeight = 22.sp,
                 ),
-                color = InkMuted,
+                color = if (errorMessage == null) InkMuted else MaterialTheme.colorScheme.error,
                 textAlign = TextAlign.Center,
             )
 

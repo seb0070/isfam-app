@@ -79,6 +79,11 @@ dependencies {
     implementation(libs.okhttp.logging)
     implementation(libs.kotlinx.serialization.json)
 
+    // 가족 화자 검증은 서버가 아니라 기기 안에서 실행합니다.
+    implementation(libs.onnxruntime.android)
+    implementation(libs.jtransforms)
+    testImplementation(libs.junit4)
+
     // implementation(libs.hilt.android)
     // ksp(libs.hilt.compiler)
     // implementation(libs.hilt.navigation.compose)

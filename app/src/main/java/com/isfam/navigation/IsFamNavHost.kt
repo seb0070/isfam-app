@@ -178,6 +178,7 @@ fun IsFamNavHost(
         }
         composable<Route.VoiceProcessing> {
             VoiceProcessingRoute(
+                audioFiles = recordedVoiceFiles.toSortedMap().values.toList(),
                 onComplete = {
                     navController.navigate(Route.VoiceComplete) {
                         popUpTo(Route.VoiceIntro) { inclusive = true }

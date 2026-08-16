@@ -13,6 +13,9 @@ retrofit = "2.11.0"
 okhttp = "4.12.0"
 serialization = "1.7.3"
 serializationConverter = "1.0.0"
+onnxRuntime = "1.24.3"
+jTransforms = "3.1"
+junit4 = "4.13.2"
 
 # 3일 스프린트에서는 사용하지 않지만, 나중을 위해 정의만 해둡니다
 hilt = "2.54"
@@ -42,6 +45,9 @@ retrofit-serialization = { group = "com.jakewharton.retrofit", name = "retrofit2
 okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }
 okhttp-logging = { group = "com.squareup.okhttp3", name = "logging-interceptor", version.ref = "okhttp" }
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "serialization" }
+onnxruntime-android = { group = "com.microsoft.onnxruntime", name = "onnxruntime-android", version.ref = "onnxRuntime" }
+jtransforms = { group = "com.github.wendykierp", name = "JTransforms", version.ref = "jTransforms" }
+junit4 = { group = "junit", name = "junit", version.ref = "junit4" }
 
 hilt-android = { group = "com.google.dagger", name = "hilt-android", version.ref = "hilt" }
 hilt-compiler = { group = "com.google.dagger", name = "hilt-android-compiler", version.ref = "hilt" }

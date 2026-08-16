@@ -2,6 +2,11 @@ package com.isfam.core
 
 import android.content.Context
 import com.isfam.data.api.IsFamApi
+import com.isfam.core.ml.AndroidAudioDecoder
+import com.isfam.core.ml.EncryptedVoiceprintStore
+import com.isfam.core.ml.OnDeviceSpeakerVerifier
+import com.isfam.core.ml.VoiceprintEnrollmentService
+import com.isfam.core.ml.HybridVoiceVerifier
 import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -58,6 +63,28 @@ class AppContainer(private val context: Context) {
 
     val tokenStore: TokenStore by lazy { TokenStore(context) }
     val deviceIdStore: DeviceIdStore by lazy { DeviceIdStore(context) }
+
+    val voiceprintStore: EncryptedVoiceprintStore by lazy {
+        EncryptedVoiceprintStore(context)
+    }
+    val onDeviceSpeakerVerifier: OnDeviceSpeakerVerifier by lazy {
+        OnDeviceSpeakerVerifier(context)
+    }
+    val voiceprintEnrollmentService: VoiceprintEnrollmentService by lazy {
+        VoiceprintEnrollmentService(
+            decoder = AndroidAudioDecoder(),
+            verifier = onDeviceSpeakerVerifier,
+            store = voiceprintStore,
+        )
+    }
+    val hybridVoiceVerifier: HybridVoiceVerifier by lazy {
+        HybridVoiceVerifier(
+            decoder = AndroidAudioDecoder(),
+            speakerVerifier = onDeviceSpeakerVerifier,
+            voiceprintStore = voiceprintStore,
+            api = api,
+        )
+    }
 
     // ── Repository ────────────────────────────────────────────
     //
