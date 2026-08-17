@@ -51,7 +51,7 @@ import com.isfam.core.designsystem.White
 private data class InfoItem(val title: String, val body: String)
 
 private val infoItems = listOf(
-    InfoItem("문장 3개, 약 20초", "조용한 곳에서 평소 말투로 읽어주세요."),
+    InfoItem("문장 3개, 약 20초", "조용한 곳에서 평소 통화하듯 읽어주세요."),
     InfoItem("원본은 저장하지 않아요", "분석 후 즉시 삭제하고 성문만 암호화 보관합니다."),
     InfoItem("가족 모두가 등록해야 해요", "서로의 목소리를 알아야 서로를 지킬 수 있어요."),
 )

@@ -120,6 +120,9 @@ fun VoiceRecordRoute(
         amplitudes = recorder.amplitudes,
         quality = recorder.quality,
         errorMessage = recorder.errorMessage,
+        failureMessage = recorder.failureReason
+            ?.takeIf { recorder.state == VoiceRecorder.State.Stopped }
+            ?.message,
         canSubmit = recorder.canSubmit,
         onToggleRecord = {
             when (recorder.state) {
@@ -146,6 +149,8 @@ fun VoiceRecordScreen(
     amplitudes: List<Float>,
     quality: Float,
     errorMessage: String?,
+    /** 녹음은 끝났지만 품질 기준에 미달한 경우의 안내 */
+    failureMessage: String? = null,
     canSubmit: Boolean,
     onToggleRecord: () -> Unit,
     onSubmit: () -> Unit,
@@ -159,14 +164,19 @@ fun VoiceRecordScreen(
         modifier = modifier,
         topBar = { IsFamTopBar(title = "문장 $sentenceIndex / 3", onBack = onBack) },
         bottomBar = {
-            if (stopped && canSubmit) {
-                com.isfam.core.designsystem.IsFamButton(
-                    text = if (sentenceIndex < 3) "다음 문장" else "등록 완료하기",
-                    onClick = onSubmit,
-                )
-                IsFamSecondaryButton(text = "다시 녹음", onClick = onToggleRecord)
-            } else {
-                RecordButton(recording = recording, onClick = onToggleRecord)
+            when {
+                stopped && canSubmit -> {
+                    com.isfam.core.designsystem.IsFamButton(
+                        text = if (sentenceIndex < 3) "다음 문장" else "등록 완료하기",
+                        onClick = onSubmit,
+                    )
+                    IsFamSecondaryButton(text = "다시 녹음", onClick = onToggleRecord)
+                }
+                // 녹음은 끝났지만 기준 미달 — 진행 버튼을 아예 주지 않습니다
+                stopped -> {
+                    IsFamSecondaryButton(text = "다시 녹음하기", onClick = onToggleRecord)
+                }
+                else -> RecordButton(recording = recording, onClick = onToggleRecord)
             }
         },
     ) {
@@ -228,17 +238,19 @@ fun VoiceRecordScreen(
                 Text(
                     when {
                         recording -> "듣고 있어요"
-                        stopped -> "잘 녹음됐어요"
+                        stopped && canSubmit -> "잘 녹음됐어요"
+                        stopped -> "다시 녹음해 주세요"
                         else -> "준비되면 눌러주세요"
                     },
                     style = MaterialTheme.typography.titleMedium.copy(fontSize = 16.sp),
-                    color = Ink,
+                    color = if (stopped && !canSubmit) Danger else Ink,
                 )
                 Spacer(Modifier.height(5.dp))
                 Text(
-                    errorMessage ?: "마이크에서 20cm 정도 거리를 두세요",
+                    errorMessage ?: failureMessage ?: "평소 통화하듯 천천히 읽어주세요",
                     style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.5.sp),
-                    color = if (errorMessage != null) Danger else InkMuted,
+                    color = if (errorMessage != null || failureMessage != null) Danger
+                    else InkMuted,
                     textAlign = TextAlign.Center,
                 )
 
@@ -397,6 +409,20 @@ private fun VoiceRecordingPreview() = IsFamTheme {
         state = VoiceRecorder.State.Recording, elapsedMs = 8_000,
         amplitudes = List(12) { 0.2f + (it % 6) * 0.13f },
         quality = 0.72f, errorMessage = null, canSubmit = false,
+        onToggleRecord = {}, onSubmit = {}, onBack = {},
+    )
+}
+
+@Preview(name = "품질 미달", showBackground = true, widthDp = 390, heightDp = 844)
+@Composable
+private fun VoiceRecordFailedPreview() = IsFamTheme {
+    VoiceRecordScreen(
+        sentenceIndex = 1, sentence = EnrollmentSentences[0],
+        state = VoiceRecorder.State.Stopped, elapsedMs = 5_400,
+        amplitudes = List(40) { 0.02f },
+        quality = 0.21f, errorMessage = null,
+        failureMessage = "목소리가 거의 들리지 않아요. 다시 읽어주세요",
+        canSubmit = false,
         onToggleRecord = {}, onSubmit = {}, onBack = {},
     )
 }
