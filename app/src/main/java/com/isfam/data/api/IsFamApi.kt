@@ -195,6 +195,20 @@ interface IsFamApi {
         @Path("notificationId") notificationId: Long,
     ): MarkReadResponse
 
+    // ══ 딥보이스 탐지 ═════════════════════════════════════════
+    //
+    // 화자 검증은 온디바이스(ONNX)에서, 딥보이스는 서버에서 합니다.
+    // 통화 음성이 서버로 올라가는 유일한 경로입니다.
+
+    @Multipart
+    @POST("api/v1/anti-spoofing/detect")
+    suspend fun detectSpoofing(
+        @Part audioFile: MultipartBody.Part,
+    ): AntiSpoofingResponse
+
+    @GET("api/v1/anti-spoofing/model-info")
+    suspend fun antiSpoofingModelInfo(): AntiSpoofingModelInfoResponse
+
     // ══ 데모 ══════════════════════════════════════════════════
 
     @POST("api/v1/demo-sessions")
@@ -590,6 +604,57 @@ data class AnalysisListResponse(
     val page: Int = 1,
     @SerialName("page_size") val pageSize: Int = 20,
     val total: Int = 0,
+)
+
+// ─── 딥보이스 탐지 ────────────────────────────────────────────
+
+@Serializable
+data class AntiSpoofingResponse(
+    /** "complete" 또는 "more_voice_required" */
+    @SerialName("analysis_status") val analysisStatus: String? = null,
+    @SerialName("processing_time_ms") val processingTimeMs: Double? = null,
+    @SerialName("is_spoofed") val isSpoofed: Boolean,
+    @SerialName("spoof_score") val spoofScore: Double,
+    val threshold: Double,
+    @SerialName("predicted_label") val predictedLabel: String,
+    @SerialName("predicted_score") val predictedScore: Double,
+    val message: String,
+    @SerialName("model_name") val modelName: String,
+    @SerialName("analyzed_segments") val analyzedSegments: Int = 0,
+    @SerialName("max_spoof_segment_index") val maxSpoofSegmentIndex: Int = 0,
+    @SerialName("segment_seconds") val segmentSeconds: Double = 0.0,
+    @SerialName("label_scores") val labelScores: List<LabelScoreDto> = emptyList(),
+    @SerialName("audio_quality") val audioQuality: AudioQualityDto? = null,
+)
+
+@Serializable
+data class LabelScoreDto(val label: String, val score: Double)
+
+/** 서버가 판정한 음질. 앱의 AudioPipeline 검사와 별개입니다. */
+@Serializable
+data class AudioQualityDto(
+    @SerialName("is_analyzable") val isAnalyzable: Boolean,
+    val message: String,
+    @SerialName("duration_seconds") val durationSeconds: Double,
+    @SerialName("rms_energy") val rmsEnergy: Double,
+    @SerialName("peak_amplitude") val peakAmplitude: Double,
+    @SerialName("speech_ratio") val speechRatio: Double,
+)
+
+@Serializable
+data class AntiSpoofingModelInfoResponse(
+    val status: String,
+    @SerialName("model_name") val modelName: String,
+    @SerialName("model_version") val modelVersion: String,
+    val device: String,
+    val threshold: Double,
+    @SerialName("sample_rate") val sampleRate: Int,
+    @SerialName("max_audio_seconds") val maxAudioSeconds: Double,
+    @SerialName("window_seconds") val windowSeconds: Double,
+    @SerialName("hop_seconds") val hopSeconds: Double,
+    @SerialName("batch_size") val batchSize: Int,
+    @SerialName("max_concurrency") val maxConcurrency: Int,
+    @SerialName("warmed_up") val warmedUp: Boolean,
 )
 
 // ─── 알림 ─────────────────────────────────────────────────────

@@ -86,6 +86,10 @@ dependencies {
     ksp(libs.room.compiler)
     implementation(libs.androidx.work.runtime)
 
+    // 온디바이스 화자 검증
+    implementation(libs.onnxruntime.android)
+    implementation(libs.jtransforms)
+
     // implementation(libs.hilt.android)
     // ksp(libs.hilt.compiler)
     // implementation(libs.hilt.navigation.compose)
