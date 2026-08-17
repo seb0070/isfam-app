@@ -41,6 +41,14 @@ sealed interface Route {
     /** 08 권한 허용 안내 */
     @Serializable data object Permission : Route
 
+    /**
+     * 08-b 통화 자동 녹음 · 배터리 최적화 안내
+     *
+     * OS 권한이 아니라 다른 앱의 설정이라 앱이 대신 켤 수 없습니다.
+     * 사용자를 해당 앱으로 보내고 단계로 안내합니다.
+     */
+    @Serializable data object CallRecordingSetup : Route
+
     // ── 2. 가족 · 목소리 등록 ─────────────────────────────────
     /** 09 목소리 등록 안내 */
     @Serializable data object VoiceIntro : Route
