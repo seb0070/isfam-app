@@ -21,8 +21,8 @@ class OnDeviceSpeakerVerifier(
     private val threshold: Float = 0.65f,
 ) : AutoCloseable {
     companion object {
-        const val MODEL_ASSET = "ecapa_tdnn_voiceprint_int8.onnx"
-        const val MODEL_VERSION = "ecapa-onnx-int8-v1"
+        const val MODEL_ASSET = "ecapa_tdnn_voiceprint.onnx"
+        const val MODEL_VERSION = "ecapa-onnx-fp32-v1"
         private const val INPUT_NAME = "features"
     }
 

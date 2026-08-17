@@ -1,6 +1,7 @@
 package com.isfam.core
 
 import android.content.Context
+import com.isfam.core.ml.HybridVoiceVerifier
 import com.isfam.core.ml.MlContainer
 import com.isfam.data.api.IsFamApi
 import kotlinx.serialization.json.Json
@@ -64,6 +65,15 @@ class AppContainer(private val context: Context) {
      * ML 레이어. ONNX 세션이 무거워(모델 21MB) 앱 전체에서 하나만 씁니다.
      */
     val ml: MlContainer by lazy { MlContainer(context) }
+
+    val hybridVoiceVerifier: HybridVoiceVerifier by lazy {
+        HybridVoiceVerifier(
+            decoder = ml.audioDecoder,
+            speakerVerifier = ml.speakerVerifier,
+            voiceprintStore = ml.voiceprintStore,
+            api = api,
+        )
+    }
 
     // ── Repository ────────────────────────────────────────────
     //

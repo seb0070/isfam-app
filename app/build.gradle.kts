@@ -89,6 +89,7 @@ dependencies {
     // 온디바이스 화자 검증
     implementation(libs.onnxruntime.android)
     implementation(libs.jtransforms)
+    testImplementation(libs.junit4)
 
     // implementation(libs.hilt.android)
     // ksp(libs.hilt.compiler)
