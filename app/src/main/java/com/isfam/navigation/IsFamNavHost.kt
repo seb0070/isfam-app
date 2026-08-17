@@ -191,20 +191,25 @@ fun IsFamNavHost(
             )
         }
         composable<Route.VoiceProcessing> {
+            // 컴포지션마다 새 List 가 만들어지지 않도록 고정합니다.
+            // 매번 새 인스턴스면 LaunchedEffect 가 반복 실행됩니다.
+            val filesForEnrollment = remember {
+                recordedVoiceFiles.entries.sortedBy { it.key }.map { it.value }
+            }
+
             VoiceProcessingRoute(
-                // 문장 순서대로 정렬해 전달합니다
-                recordedFiles = recordedVoiceFiles.entries.sortedBy { it.key }.map { it.value },
+                recordedFiles = filesForEnrollment,
                 onComplete = {
                     recordedVoiceFiles.clear()
                     navController.navigate(Route.VoiceComplete) {
-                        popUpTo(Route.VoiceIntro) { inclusive = true }
+                        popUpTo(Route.VoiceProcessing) { inclusive = true }
                     }
                 },
                 onFailed = {
                     // 음질 미달 등으로 실패하면 첫 문장부터 다시 녹음합니다
                     recordedVoiceFiles.clear()
                     navController.navigate(Route.VoiceRecord(1)) {
-                        popUpTo(Route.VoiceIntro)
+                        popUpTo(Route.VoiceProcessing) { inclusive = true }
                     }
                 },
             )

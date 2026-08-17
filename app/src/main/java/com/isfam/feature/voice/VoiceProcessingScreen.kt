@@ -28,6 +28,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -98,13 +99,21 @@ fun VoiceProcessingRoute(
     var doneCount by remember { mutableIntStateOf(0) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
-    LaunchedEffect(recordedFiles) {
+    // 콜백을 최신 값으로 유지합니다.
+    // LaunchedEffect 가 다시 시작되지 않게 하려면 콜백을 키에서 빼야 하는데,
+    // 그러면 오래된 람다를 붙잡고 있을 수 있어 rememberUpdatedState 로 감쌉니다.
+    val currentOnComplete by rememberUpdatedState(onComplete)
+    val currentOnFailed by rememberUpdatedState(onFailed)
+
+    // 파일 목록은 매 컴포지션마다 새 List 인스턴스가 될 수 있습니다.
+    // 그대로 키로 쓰면 LaunchedEffect 가 반복 실행되므로 크기로 고정합니다.
+    LaunchedEffect(recordedFiles.size) {
         if (recordedFiles.isEmpty()) {
-            onFailed("녹음 파일이 없습니다")
+            currentOnFailed("녹음 파일이 없습니다")
             return@LaunchedEffect
         }
 
-        runCatching {
+        val outcome = runCatching {
             // ① 음질 검사 — enroll() 내부에서 길이·RMS 를 확인합니다
             doneCount = 1
             delay(300)
@@ -114,7 +123,7 @@ fun VoiceProcessingRoute(
             delay(300)
 
             // ③ 성문 생성 — ONNX 추론. 실제로 시간이 걸리는 단계입니다
-            val voiceprint = withContext(Dispatchers.Default) {
+            withContext(Dispatchers.Default) {
                 ml.enrollmentService.enroll(
                     familyId = profileId,
                     audioFiles = recordedFiles,
@@ -125,17 +134,24 @@ fun VoiceProcessingRoute(
             // ④ 보안 저장 — enroll() 이 Keystore 에 이미 저장했습니다
             delay(200)
             doneCount = 4
-            voiceprint
-        }.onSuccess {
-            // 원본 녹음 파일은 성문 생성 후 삭제합니다.
-            // 음성 원본을 남기지 않는다는 원칙을 코드로 지킵니다.
-            recordedFiles.forEach { runCatching { it.delete() } }
             delay(400)
-            onComplete()
-        }.onFailure { error ->
-            errorMessage = error.message ?: "성문 생성에 실패했습니다"
-            onFailed(errorMessage!!)
         }
+
+        // ⚠️ 화면을 떠나면 이 코루틴이 취소되면서 CancellationException 이
+        //    발생합니다. runCatching 이 그것까지 잡아 "실패"로 처리하면
+        //    onFailed 가 한 번 더 호출되어 녹음 화면으로 되돌아갑니다.
+        //    취소는 오류가 아니므로 그대로 다시 던져야 합니다.
+        outcome.exceptionOrNull()?.let { error ->
+            if (error is kotlinx.coroutines.CancellationException) throw error
+            errorMessage = error.message ?: "성문 생성에 실패했습니다"
+            currentOnFailed(errorMessage!!)
+            return@LaunchedEffect
+        }
+
+        // 원본 녹음 파일은 성문 생성 후 삭제합니다.
+        // 음성 원본을 남기지 않는다는 원칙을 코드로 지킵니다.
+        recordedFiles.forEach { runCatching { it.delete() } }
+        currentOnComplete()
     }
 
     VoiceProcessingScreen(doneCount = doneCount, errorMessage = errorMessage)

@@ -27,9 +27,6 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
 
-        // 리샘플러 자체 검증. 확인 후 지우세요.
-        android.util.Log.d("IsFam", com.isfam.core.audio.AudioSelfTest.run())
-
         setContent {
             IsFamTheme {
                 Surface(
