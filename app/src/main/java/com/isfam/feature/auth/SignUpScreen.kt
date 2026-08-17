@@ -80,12 +80,6 @@ private const val MIN_PASSWORD_LENGTH = 8
 enum class PhoneVerifyState { Idle, CodeSent, Verifying, Verified, Failed }
 
 data class SignUpForm(
-    /**
-     * 만 14세 이상 확인.
-     * 개인정보보호법상 14세 미만은 법정대리인 동의가 필요한데
-     * SMS 인증만으로는 나이를 알 수 없어 자기 확인으로 처리합니다.
-     */
-    val ageOver14: Boolean = false,
     val terms: Boolean = false,
     val voiceData: Boolean = false,
     val marketing: Boolean = false,
@@ -96,8 +90,8 @@ data class SignUpForm(
     val password: String = "",
     val passwordConfirm: String = "",
 ) {
-    val allAgreed get() = ageOver14 && terms && voiceData && marketing
-    val requiredAgreed get() = ageOver14 && terms && voiceData
+    val allAgreed get() = terms && voiceData && marketing
+    val requiredAgreed get() = terms && voiceData
     val nameDone get() = name.trim().length >= 2
     val displayNameDone get() = displayName.isNotBlank()
     val phoneDone get() = phone.filter(Char::isDigit).length >= 10
@@ -131,14 +125,15 @@ fun SignUpRoute(
         remainSec = remainSec,
         onFormChange = { form = it },
         onSendCode = {
-            // TODO: 인증번호 발송 API 연결
+            // TODO: POST /auth/phone/send → verification_id 저장
             verifyState = PhoneVerifyState.CodeSent
         },
         onVerifyCode = {
             scope.launch {
                 verifyState = PhoneVerifyState.Verifying
                 delay(400)
-                // TODO: 서버 검증으로 교체. 현재 서버는 "123456" 고정입니다.
+                // TODO: POST /auth/phone/verify → phone_verification_token 저장
+                //       가입 요청에는 인증번호가 아니라 이 토큰을 보냅니다.
                 verifyState =
                     if (form.code == "123456") PhoneVerifyState.Verified
                     else PhoneVerifyState.Failed
@@ -408,7 +403,7 @@ private fun TermsCard(
                 checked = form.allAgreed,
                 onCheckedChange = { c ->
                     onFormChange(
-                        form.copy(ageOver14 = c, terms = c, voiceData = c, marketing = c)
+                        form.copy(terms = c, voiceData = c, marketing = c)
                     )
                 },
                 label = "약관 전체 동의",
@@ -432,11 +427,6 @@ private fun TermsCard(
                 Spacer(Modifier.height(14.dp))
 
                 Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    CheckboxRow(
-                        checked = form.ageOver14,
-                        onCheckedChange = { onFormChange(form.copy(ageOver14 = it)) },
-                        label = "[필수] 만 14세 이상입니다",
-                    )
                     CheckboxRow(
                         checked = form.terms,
                         onCheckedChange = { onFormChange(form.copy(terms = it)) },
@@ -491,7 +481,7 @@ private fun SignUpStep1Preview() = IsFamTheme {
 private fun SignUpStep2Preview() = IsFamTheme {
     SignUpScreen(
         form = SignUpForm(
-            ageOver14 = true, terms = true, voiceData = true, marketing = true,
+            terms = true, voiceData = true, marketing = true,
             name = "김서연", displayName = "서연",
             phone = "010 1234 5678", code = "482",
         ),
@@ -506,7 +496,7 @@ private fun SignUpStep2Preview() = IsFamTheme {
 private fun SignUpStep3Preview() = IsFamTheme {
     SignUpScreen(
         form = SignUpForm(
-            ageOver14 = true, terms = true, voiceData = true, marketing = true,
+            terms = true, voiceData = true, marketing = true,
             name = "김서연", displayName = "서연",
             phone = "010 1234 5678", code = "123456",
             password = "12345678", passwordConfirm = "12345678",

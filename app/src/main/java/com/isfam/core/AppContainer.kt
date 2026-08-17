@@ -1,12 +1,9 @@
 package com.isfam.core
 
 import android.content.Context
-import com.isfam.data.api.IsFamApi
-import com.isfam.core.ml.AndroidAudioDecoder
-import com.isfam.core.ml.EncryptedVoiceprintStore
-import com.isfam.core.ml.OnDeviceSpeakerVerifier
-import com.isfam.core.ml.VoiceprintEnrollmentService
 import com.isfam.core.ml.HybridVoiceVerifier
+import com.isfam.core.ml.MlContainer
+import com.isfam.data.api.IsFamApi
 import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -64,24 +61,16 @@ class AppContainer(private val context: Context) {
     val tokenStore: TokenStore by lazy { TokenStore(context) }
     val deviceIdStore: DeviceIdStore by lazy { DeviceIdStore(context) }
 
-    val voiceprintStore: EncryptedVoiceprintStore by lazy {
-        EncryptedVoiceprintStore(context)
-    }
-    val onDeviceSpeakerVerifier: OnDeviceSpeakerVerifier by lazy {
-        OnDeviceSpeakerVerifier(context)
-    }
-    val voiceprintEnrollmentService: VoiceprintEnrollmentService by lazy {
-        VoiceprintEnrollmentService(
-            decoder = AndroidAudioDecoder(),
-            verifier = onDeviceSpeakerVerifier,
-            store = voiceprintStore,
-        )
-    }
+    /**
+     * ML 레이어. ONNX 세션이 무거워(모델 21MB) 앱 전체에서 하나만 씁니다.
+     */
+    val ml: MlContainer by lazy { MlContainer(context) }
+
     val hybridVoiceVerifier: HybridVoiceVerifier by lazy {
         HybridVoiceVerifier(
-            decoder = AndroidAudioDecoder(),
-            speakerVerifier = onDeviceSpeakerVerifier,
-            voiceprintStore = voiceprintStore,
+            decoder = ml.audioDecoder,
+            speakerVerifier = ml.speakerVerifier,
+            voiceprintStore = ml.voiceprintStore,
             api = api,
         )
     }
@@ -106,6 +95,11 @@ class IsFamApplication : android.app.Application() {
     override fun onCreate() {
         super.onCreate()
         container = AppContainer(this)
+    }
+
+    override fun onTerminate() {
+        container.ml.close()
+        super.onTerminate()
     }
 }
 

@@ -154,7 +154,7 @@ class PermissionChecker(private val context: Context) {
 
     fun isGranted(p: RuntimePermission): Boolean =
         ContextCompat.checkSelfPermission(context, p.manifestKey) ==
-            PackageManager.PERMISSION_GRANTED
+                PackageManager.PERMISSION_GRANTED
 
     fun statusOf(activity: Activity, p: RuntimePermission): PermissionStatus = when {
         isGranted(p) -> PermissionStatus.Granted
@@ -215,15 +215,37 @@ object SettingsIntents {
         Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
 
     /**
-     * 삼성 전화 앱 설정.
+     * 전화 앱 실행.
      *
-     * 자동 통화녹음 화면으로 직접 보내는 공식 딥링크는 없습니다.
-     * 전화 앱을 띄우는 것까지만 가능하고, 그 안에서의 이동은
-     * 사용자가 직접 해야 하므로 화면에 단계별 안내가 필요합니다.
+     * 자동 통화녹음은 시스템 설정이 아니라 삼성 전화 앱 안에 있습니다.
+     *
+     *   전화 앱 → ⋮ → 설정 → 통화 녹음 → 통화 자동 녹음
+     *
+     * 해당 화면으로 직접 보내는 공식 딥링크는 없습니다.
+     * 삼성이 exported="false" 로 막아두었고, 비공식 컴포넌트 이름을
+     * 직접 지정하는 방법은 One UI 버전마다 깨지므로 쓰지 않습니다.
+     *
+     * 전화 앱을 띄우는 것까지만 하고, 나머지는 화면에서 단계로 안내합니다.
      */
-    fun samsungDialerSettings(context: Context): Intent? = runCatching {
-        context.packageManager.getLaunchIntentForPackage("com.samsung.android.dialer")
-    }.getOrNull()
+    fun dialerApp(context: Context): Intent? {
+        val pm = context.packageManager
+        // 삼성 전화 앱 → 기본 전화 앱 순으로 시도
+        return runCatching { pm.getLaunchIntentForPackage(SAMSUNG_DIALER) }.getOrNull()
+            ?: runCatching {
+                Intent(Intent.ACTION_DIAL).takeIf { it.resolveActivity(pm) != null }
+            }.getOrNull()
+    }
+
+    /** 삼성 기기인지 (자동녹음 지원 가능성 판단용) */
+    fun isSamsungDevice(): Boolean =
+        android.os.Build.MANUFACTURER.equals("samsung", ignoreCase = true)
+
+    /** 전화 앱이 설치되어 있는지 */
+    fun hasSamsungDialer(context: Context): Boolean = runCatching {
+        context.packageManager.getLaunchIntentForPackage(SAMSUNG_DIALER) != null
+    }.getOrDefault(false)
+
+    private const val SAMSUNG_DIALER = "com.samsung.android.dialer"
 
     /** 인텐트를 안전하게 실행. 실패해도 앱이 죽지 않게 합니다. */
     fun safeStart(context: Context, vararg candidates: Intent?): Boolean {

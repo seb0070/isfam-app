@@ -47,6 +47,7 @@ import com.isfam.feature.history.HistorySegment
 import com.isfam.feature.home.HomeRoute
 import com.isfam.feature.home.MemberStatus
 import com.isfam.feature.home.RegistrationRequestSheet
+import com.isfam.feature.onboarding.CallRecordingSetupRoute
 import com.isfam.feature.onboarding.OnboardingRoute
 import com.isfam.feature.result.AnalysisResultRoute
 import com.isfam.feature.settings.SettingsRoute
@@ -68,7 +69,7 @@ import com.isfam.feature.voice.VoiceRecordRoute
  *   ✅ 01 스플래시
  *   ✅ 02·03·04 온보딩
  *   ✅ 05 로그인 · 06 회원가입 · 07 OTP
- *   ✅ 08 권한
+ *   ✅ 08 권한 · 08-b 자동녹음·배터리 안내
  *   ✅ 09·10·11·12 목소리 등록
  *   ✅ 13·14·15·16·17·18 가족 공간 · 초대
  *   ✅ 19·20 홈 · 등록 요청 시트
@@ -144,8 +145,21 @@ fun IsFamNavHost(
             PermissionRoute(
                 session = signUpSession,
                 onSignUpComplete = {
-                    navController.navigate(Route.VoiceIntro) {
+                    navController.navigate(Route.CallRecordingSetup) {
                         popUpTo(Route.SignUp) { inclusive = true }
+                    }
+                },
+                onBack = { navController.popBackStack() },
+            )
+        }
+
+        composable<Route.CallRecordingSetup> {
+            CallRecordingSetupRoute(
+                onNext = { callRecordingEnabled ->
+                    signUpSession.callRecordingEnabled = callRecordingEnabled
+                    // TODO: PUT /devices/me/capability 로 자기 신고값 전송
+                    navController.navigate(Route.VoiceIntro) {
+                        popUpTo(Route.CallRecordingSetup) { inclusive = true }
                     }
                 },
                 onBack = { navController.popBackStack() },
@@ -177,11 +191,25 @@ fun IsFamNavHost(
             )
         }
         composable<Route.VoiceProcessing> {
+            // 컴포지션마다 새 List 가 만들어지지 않도록 고정합니다.
+            // 매번 새 인스턴스면 LaunchedEffect 가 반복 실행됩니다.
+            val filesForEnrollment = remember {
+                recordedVoiceFiles.entries.sortedBy { it.key }.map { it.value }
+            }
+
             VoiceProcessingRoute(
-                audioFiles = recordedVoiceFiles.toSortedMap().values.toList(),
+                recordedFiles = filesForEnrollment,
                 onComplete = {
+                    recordedVoiceFiles.clear()
                     navController.navigate(Route.VoiceComplete) {
-                        popUpTo(Route.VoiceIntro) { inclusive = true }
+                        popUpTo(Route.VoiceProcessing) { inclusive = true }
+                    }
+                },
+                onFailed = {
+                    // 음질 미달 등으로 실패하면 첫 문장부터 다시 녹음합니다
+                    recordedVoiceFiles.clear()
+                    navController.navigate(Route.VoiceRecord(1)) {
+                        popUpTo(Route.VoiceProcessing) { inclusive = true }
                     }
                 },
             )
@@ -208,8 +236,9 @@ fun IsFamNavHost(
         composable<Route.FamilyInvite> {
             FamilyInviteRoute(
                 // TODO: POST /api/v1/family/invite-code 응답으로 교체
-                inviteCode = "F7K2M9",
-                expiresInText = "유효시간 23시간 58분 남음",
+                inviteCode = "AB12CD",
+                qrCodeUrl = null,
+                expiresInText = "유효시간 71시간 58분 남음",
                 onSkip = {
                     navController.navigate(Route.Home) {
                         popUpTo(Route.FamilyEntry) { inclusive = true }
@@ -220,8 +249,9 @@ fun IsFamNavHost(
         }
         composable<Route.FamilyInviteManage> {
             FamilyInviteRoute(
-                inviteCode = "F7K2M9",
-                expiresInText = "유효시간 23시간 58분 남음",
+                inviteCode = "AB12CD",
+                qrCodeUrl = null,
+                expiresInText = "유효시간 71시간 58분 남음",
                 isReentry = true,
                 onSkip = null,
                 onBack = { navController.popBackStack() },
