@@ -1,13 +1,14 @@
 // app/build.gradle.kts
 //
-// 3일 스프린트용 단일 모듈 설정입니다.
-// Hilt / Room 은 주석 처리해 뒀습니다. 필요해지면 주석만 풀면 됩니다.
+// 플러그인 버전은 루트 build.gradle.kts 에서만 지정합니다.
+// 여기서 version 을 다시 쓰면 "already on the classpath" 충돌이 납니다.
 
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
     id("org.jetbrains.kotlin.plugin.serialization")
+    id("com.google.devtools.ksp")
 }
 
 android {
@@ -79,10 +80,13 @@ dependencies {
     implementation(libs.okhttp.logging)
     implementation(libs.kotlinx.serialization.json)
 
+    // 통화 이벤트 저장 · 백그라운드 분석
+    implementation(libs.room.runtime)
+    implementation(libs.room.ktx)
+    ksp(libs.room.compiler)
+    implementation(libs.androidx.work.runtime)
+
     // implementation(libs.hilt.android)
     // ksp(libs.hilt.compiler)
     // implementation(libs.hilt.navigation.compose)
-    // implementation(libs.room.runtime)
-    // implementation(libs.room.ktx)
-    // ksp(libs.room.compiler)
 }
