@@ -52,18 +52,29 @@ class VoiceRecorder(private val context: Context) {
         const val MIN_SPEECH_RATIO = 0.45f
 
         /**
-         * 발화로 인정할 진폭 하한 (로그 스케일 0~1).
+         * 만점 기준 발화 비율.
          *
-         * maxAmplitude 원시값 기준으로 대략 1500 정도입니다.
-         * 사람이 정상적으로 말하면 0.65~0.85 가 나오고,
-         * 조용한 방의 배경 잡음은 0.3 을 넘지 않습니다.
-         *
-         * ⚠️ 이 값이 낮으면 무음도 "말했다"고 세어 품질이 부풀려집니다.
+         * 문장을 자연스럽게 읽으면 쉼표·마침표 때문에 100% 는 안 나옵니다.
+         * 70% 면 충분히 또박또박 읽은 것으로 봅니다.
          */
-        private const val SPEECH_LEVEL = 0.55f
+        private const val TARGET_SPEECH_RATIO = 0.70f
+
+        /**
+         * 발화로 인정할 진폭 하한 (maxAmplitude 원시값, 0~32767).
+         *
+         * ⚠️ 로그 스케일 값으로 판정하면 안 됩니다.
+         *    실측에서 무음이 0.42, 말소리가 0.78 로 나왔습니다.
+         *    원시값으로는 75 vs 3196 인데 로그를 씌우면 차이가
+         *    거의 사라져 분별력이 없어집니다.
+         *
+         * 실측 (SM-S937N, 조용한 실내)
+         *   무음·배경잡음  75 ~ 130
+         *   정상 발화     1200 ~ 6000
+         */
+        private const val SPEECH_RAW = 600
 
         /** 목소리가 또렷하다고 볼 수 있는 평균 진폭 */
-        private const val GOOD_LEVEL = 0.72f
+        private const val GOOD_RAW = 2500
     }
 
     enum class State { Idle, Recording, Stopped, Error }
@@ -203,11 +214,12 @@ class VoiceRecorder(private val context: Context) {
         amplitudes.add(normalized)
         if (amplitudes.size > WAVE_BARS) amplitudes.removeAt(0)
 
-        // 품질 계산용 (전체 구간 누적)
+        // 품질 계산용 (전체 구간 누적).
+        // 판정은 정규화 값이 아니라 원시 진폭으로 합니다.
         totalFrames++
-        if (normalized > SPEECH_LEVEL) {
+        if (raw > SPEECH_RAW) {
             voicedFrames++
-            voicedLevelSum += normalized
+            voicedLevelSum += raw.toDouble()
         }
 
         elapsedMs += TICK_MS.toInt()
@@ -220,9 +232,10 @@ class VoiceRecorder(private val context: Context) {
         if (com.isfam.BuildConfig.DEBUG && totalFrames % 16 == 0) {
             android.util.Log.d(
                 "IsFamRecord",
-                "raw=%5d  정규화=%.2f  발화 %d/%d (%.0f%%)  품질 %.0f%%".format(
-                    raw, normalized, voicedFrames, totalFrames,
-                    speechRatio * 100, quality * 100,
+                "raw=%5d  발화 %d/%d (%.0f%%)  평균 %.0f  품질 %.0f%%".format(
+                    raw, voicedFrames, totalFrames, speechRatio * 100,
+                    if (voicedFrames > 0) voicedLevelSum / voicedFrames else 0.0,
+                    quality * 100,
                 ),
             )
         }
@@ -249,12 +262,14 @@ class VoiceRecorder(private val context: Context) {
         // 한 번도 말하지 않았으면 0점입니다
         if (voicedFrames == 0) return 0f
 
-        // 얼마나 자주 말했는가
-        val ratioScore = (speechRatio / MIN_SPEECH_RATIO).coerceIn(0f, 1f)
+        // 얼마나 자주 말했는가.
+        // 최소치(45%)가 아니라 목표치(70%)를 기준으로 나눕니다.
+        // 최소치로 나누면 45%만 넘어도 만점이 되어버립니다.
+        val ratioScore = (speechRatio / TARGET_SPEECH_RATIO).coerceIn(0f, 1f)
 
         // 말할 때 충분히 크게 말했는가 (무음 구간은 평균에서 제외)
         val level = (voicedLevelSum / voicedFrames).toFloat()
-        val levelScore = ((level - SPEECH_LEVEL) / (GOOD_LEVEL - SPEECH_LEVEL))
+        val levelScore = ((level - SPEECH_RAW) / (GOOD_RAW - SPEECH_RAW))
             .coerceIn(0f, 1f)
 
         return (ratioScore * 0.6f + levelScore * 0.4f).coerceIn(0f, 1f)
