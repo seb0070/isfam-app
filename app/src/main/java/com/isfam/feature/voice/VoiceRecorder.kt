@@ -176,6 +176,14 @@ class VoiceRecorder(private val context: Context) {
         }
     }
 
+    /**
+     * 녹음 상태를 완전히 초기화하고 파일도 삭제합니다.
+     *
+     * ⚠️ 화면을 떠날 때 이걸 부르면 안 됩니다.
+     *    다음 문장으로 넘어갈 때도 화면이 사라지므로,
+     *    방금 녹음한 파일까지 지워집니다.
+     *    화면 종료 시에는 releaseResources() 를 쓰세요.
+     */
     fun reset() {
         release()
         outputFile?.delete()
@@ -189,6 +197,18 @@ class VoiceRecorder(private val context: Context) {
         speechRatio = 0f
         errorMessage = null
         state = State.Idle
+    }
+
+    /**
+     * MediaRecorder 만 해제합니다. 녹음 파일은 남깁니다.
+     *
+     * 화면을 벗어날 때 반드시 호출해야 합니다.
+     * 마이크가 점유된 채로 남으면 다음 녹음이 실패하고
+     * 다른 앱도 마이크를 쓸 수 없습니다.
+     */
+    fun releaseResources() {
+        release()
+        if (state == State.Recording) state = State.Idle
     }
 
     private fun release() {

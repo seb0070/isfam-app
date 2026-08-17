@@ -107,9 +107,13 @@ fun VoiceRecordRoute(
         }
     }
 
-    // 화면을 벗어나면 반드시 해제
+    // 화면을 벗어나면 마이크를 반드시 놓아줍니다.
+    //
+    // ⚠️ reset() 을 부르면 안 됩니다. 다음 문장으로 넘어갈 때도
+    //    이 화면이 사라지므로 방금 녹음한 파일까지 삭제됩니다.
+    //    (실제로 "audio file is empty" 오류를 겪었습니다)
     DisposableEffect(Unit) {
-        onDispose { recorder.reset() }
+        onDispose { recorder.releaseResources() }
     }
 
     VoiceRecordScreen(

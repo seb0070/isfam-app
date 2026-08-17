@@ -113,6 +113,18 @@ fun VoiceProcessingRoute(
             return@LaunchedEffect
         }
 
+        // 화면 전환 과정에서 파일이 사라지는 일이 있었습니다.
+        // 무슨 일이 있었는지 알 수 있도록 여기서 한 번 확인합니다.
+        val missing = recordedFiles.filter { !it.exists() || it.length() == 0L }
+        if (missing.isNotEmpty()) {
+            android.util.Log.e(
+                "IsFamVoice",
+                "녹음 파일 누락: ${missing.joinToString { it.name }}",
+            )
+            currentOnFailed("녹음 파일이 손상되었어요. 처음부터 다시 녹음해 주세요")
+            return@LaunchedEffect
+        }
+
         val outcome = runCatching {
             // ① 음질 검사 — enroll() 내부에서 길이·RMS 를 확인합니다
             doneCount = 1
