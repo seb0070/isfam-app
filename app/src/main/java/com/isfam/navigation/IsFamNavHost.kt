@@ -192,9 +192,19 @@ fun IsFamNavHost(
         }
         composable<Route.VoiceProcessing> {
             VoiceProcessingRoute(
+                // 문장 순서대로 정렬해 전달합니다
+                recordedFiles = recordedVoiceFiles.entries.sortedBy { it.key }.map { it.value },
                 onComplete = {
+                    recordedVoiceFiles.clear()
                     navController.navigate(Route.VoiceComplete) {
                         popUpTo(Route.VoiceIntro) { inclusive = true }
+                    }
+                },
+                onFailed = {
+                    // 음질 미달 등으로 실패하면 첫 문장부터 다시 녹음합니다
+                    recordedVoiceFiles.clear()
+                    navController.navigate(Route.VoiceRecord(1)) {
+                        popUpTo(Route.VoiceIntro)
                     }
                 },
             )

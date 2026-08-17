@@ -1,6 +1,7 @@
 package com.isfam.core
 
 import android.content.Context
+import com.isfam.core.ml.MlContainer
 import com.isfam.data.api.IsFamApi
 import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
@@ -59,6 +60,11 @@ class AppContainer(private val context: Context) {
     val tokenStore: TokenStore by lazy { TokenStore(context) }
     val deviceIdStore: DeviceIdStore by lazy { DeviceIdStore(context) }
 
+    /**
+     * ML 레이어. ONNX 세션이 무거워(모델 21MB) 앱 전체에서 하나만 씁니다.
+     */
+    val ml: MlContainer by lazy { MlContainer(context) }
+
     // ── Repository ────────────────────────────────────────────
     //
     // useFakeData 하나로 전체가 전환됩니다.
@@ -79,6 +85,11 @@ class IsFamApplication : android.app.Application() {
     override fun onCreate() {
         super.onCreate()
         container = AppContainer(this)
+    }
+
+    override fun onTerminate() {
+        container.ml.close()
+        super.onTerminate()
     }
 }
 

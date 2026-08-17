@@ -26,10 +26,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
@@ -40,7 +42,9 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.isfam.core.designsystem.Amber500
+import com.isfam.core.IsFamApplication
 import com.isfam.core.designsystem.CardIllustStart
+import com.isfam.core.designsystem.Danger
 import com.isfam.core.designsystem.DisabledBg
 import com.isfam.core.designsystem.Honey300
 import com.isfam.core.designsystem.IndicatorOff
@@ -55,7 +59,11 @@ import com.isfam.core.designsystem.MascotImage
 import com.isfam.core.designsystem.ProcessingEnd
 import com.isfam.core.designsystem.Safe
 import com.isfam.core.designsystem.White
+import com.isfam.core.ml.VoiceprintEnrollmentService
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
+import java.io.File
 
 /**
  * 11. 성문 생성 중
@@ -76,25 +84,67 @@ enum class ProcessingStep(val label: String) {
 }
 
 @Composable
-fun VoiceProcessingRoute(onComplete: () -> Unit) {
-    var doneCount by remember { mutableIntStateOf(0) }
+fun VoiceProcessingRoute(
+    /** 10번 화면에서 녹음한 문장 3개 */
+    recordedFiles: List<File>,
+    /** 저장할 프로필 ID. 본인이면 OWNER_PROFILE_ID */
+    profileId: String = VoiceprintEnrollmentService.OWNER_PROFILE_ID,
+    onComplete: () -> Unit,
+    onFailed: (String) -> Unit,
+) {
+    val context = LocalContext.current
+    val ml = remember { (context.applicationContext as IsFamApplication).container.ml }
 
-    LaunchedEffect(Unit) {
-        // TODO: POST /api/v1/family/register 업로드 진행률과 연동
-        delay(900); doneCount = 1
-        delay(900); doneCount = 2
-        delay(1400); doneCount = 3
-        delay(700); doneCount = 4
-        delay(400)
-        onComplete()
+    var doneCount by remember { mutableIntStateOf(0) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(recordedFiles) {
+        if (recordedFiles.isEmpty()) {
+            onFailed("녹음 파일이 없습니다")
+            return@LaunchedEffect
+        }
+
+        runCatching {
+            // ① 음질 검사 — enroll() 내부에서 길이·RMS 를 확인합니다
+            doneCount = 1
+            delay(300)
+
+            // ② 노이즈 정리 (현재는 정규화만)
+            doneCount = 2
+            delay(300)
+
+            // ③ 성문 생성 — ONNX 추론. 실제로 시간이 걸리는 단계입니다
+            val voiceprint = withContext(Dispatchers.Default) {
+                ml.enrollmentService.enroll(
+                    familyId = profileId,
+                    audioFiles = recordedFiles,
+                )
+            }
+            doneCount = 3
+
+            // ④ 보안 저장 — enroll() 이 Keystore 에 이미 저장했습니다
+            delay(200)
+            doneCount = 4
+            voiceprint
+        }.onSuccess {
+            // 원본 녹음 파일은 성문 생성 후 삭제합니다.
+            // 음성 원본을 남기지 않는다는 원칙을 코드로 지킵니다.
+            recordedFiles.forEach { runCatching { it.delete() } }
+            delay(400)
+            onComplete()
+        }.onFailure { error ->
+            errorMessage = error.message ?: "성문 생성에 실패했습니다"
+            onFailed(errorMessage!!)
+        }
     }
 
-    VoiceProcessingScreen(doneCount = doneCount)
+    VoiceProcessingScreen(doneCount = doneCount, errorMessage = errorMessage)
 }
 
 @Composable
 fun VoiceProcessingScreen(
     doneCount: Int,
+    errorMessage: String? = null,
     modifier: Modifier = Modifier,
 ) {
     val progress = doneCount / ProcessingStep.entries.size.toFloat()
@@ -145,11 +195,11 @@ fun VoiceProcessingScreen(
             )
             Spacer(Modifier.height(10.dp))
             Text(
-                "잠시만 기다려 주세요. 보통 10초 이내에 끝나요.",
+                errorMessage ?: "잠시만 기다려 주세요. 보통 10초 이내에 끝나요.",
                 style = MaterialTheme.typography.bodyMedium.copy(
                     fontSize = 13.5.sp, lineHeight = 22.sp,
                 ),
-                color = InkMuted,
+                color = if (errorMessage != null) Danger else InkMuted,
                 textAlign = TextAlign.Center,
             )
 
