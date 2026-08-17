@@ -40,6 +40,7 @@ class PhoneStateReceiver : BroadcastReceiver() {
 
         when (state) {
             TelephonyManager.EXTRA_STATE_RINGING -> {
+                CallLog.d("벨 울림 — 수신 전화")
                 prefs.edit()
                     .putBoolean(KEY_SAW_RINGING, true)
                     .putString(KEY_LAST_STATE, state)
@@ -57,6 +58,7 @@ class PhoneStateReceiver : BroadcastReceiver() {
                 if (lastState == TelephonyManager.EXTRA_STATE_OFFHOOK) {
                     val isIncoming = prefs.getBoolean(KEY_SAW_RINGING, false)
                     val startedAt = prefs.getLong(KEY_OFFHOOK_AT, now)
+                    CallLog.d("통화 종료 감지 — 분석 작업 예약")
                     enqueueCallEnded(context, startedAt, now, isIncoming)
                 }
                 prefs.edit()
