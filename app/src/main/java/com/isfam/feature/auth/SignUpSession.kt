@@ -23,10 +23,16 @@ class SignUpSession {
     var displayName by mutableStateOf("")       // 닉네임
     var phoneNumber by mutableStateOf("")
     var password by mutableStateOf("")
-    var verificationCode by mutableStateOf("")
+    /** phone/send 응답. verify 요청에 사용합니다. */
+    var verificationId by mutableStateOf("")
 
-    /** 만 14세 이상 확인 (자기 확인) */
-    var ageOver14 by mutableStateOf(false)
+    /**
+     * phone/verify 응답으로 받는 1회용 토큰.
+     * 5분간 유효하며 signup 에서 소비되면 폐기됩니다.
+     * 인증번호 자체가 아니라 이 토큰을 가입 요청에 보냅니다.
+     */
+    var phoneVerificationToken by mutableStateOf("")
+
     var termsAgreed by mutableStateOf(false)
     var voicePrintAgreed by mutableStateOf(false)
     var marketingAgreed by mutableStateOf(false)
@@ -44,22 +50,21 @@ class SignUpSession {
      * 사용자가 "설정했어요"를 누른 자기 신고값일 뿐이고,
      * 실제 동작 여부는 첫 통화 후 녹음 파일이 생겨야 확인됩니다.
      */
-    var autoRecordingEnabled by mutableStateOf(false)
+    var callRecordingEnabled by mutableStateOf(false)
 
     // ── 서버 전송용 ───────────────────────────────────────────
 
     /** 06 화면을 통과했는지 */
     val infoCollected: Boolean
         get() = userName.isNotBlank() && phoneNumber.isNotBlank() &&
-                password.isNotBlank() && ageOver14 && termsAgreed && voicePrintAgreed
+                password.isNotBlank() && phoneVerificationToken.isNotBlank() &&
+                termsAgreed && voicePrintAgreed
 
     fun applyForm(form: SignUpForm) {
         userName = form.name
         displayName = form.displayName.ifBlank { form.name }
         phoneNumber = form.phone
         password = form.password
-        verificationCode = form.code
-        ageOver14 = form.ageOver14
         termsAgreed = form.terms
         voicePrintAgreed = form.voiceData
         marketingAgreed = form.marketing
@@ -69,20 +74,19 @@ class SignUpSession {
         notification: Boolean,
         microphone: Boolean,
         file: Boolean,
-        autoRecording: Boolean,
+        callRecording: Boolean,
     ) {
         notificationPermission = notification
         microphonePermission = microphone
         filePermission = file
-        autoRecordingEnabled = autoRecording
+        callRecordingEnabled = callRecording
     }
 
     fun reset() {
         userName = ""; displayName = ""; phoneNumber = ""
-        password = ""; verificationCode = ""
-        ageOver14 = false
+        password = ""; verificationId = ""; phoneVerificationToken = ""
         termsAgreed = false; voicePrintAgreed = false; marketingAgreed = false
         notificationPermission = false; microphonePermission = false
-        filePermission = false; autoRecordingEnabled = false
+        filePermission = false; callRecordingEnabled = false
     }
 }

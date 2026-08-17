@@ -740,23 +740,26 @@ private fun CodeBox(
 }
 
 /**
- * QR 코드 자리.
+ * QR 코드.
  *
- * 실제 QR 생성에는 ZXing 이 필요합니다.
- *   libs.versions.toml:  zxing = { group = "com.google.zxing", name = "core", version = "3.5.3" }
- *   app/build.gradle.kts: implementation(libs.zxing)
+ * ⚠️ 서버가 QR 이미지를 만들어 줍니다 (invite-code 응답의 qr_code_url).
+ *    앱에서 ZXing 으로 생성할 필요가 없습니다.
  *
- * 의존성을 추가한 뒤 아래 주석의 generateQrBitmap 을 사용하세요.
+ * 이미지 로딩 라이브러리를 추가한 뒤 아래 주석을 해제하세요.
+ *   libs.versions.toml:   coil = { group = "io.coil-kt", name = "coil-compose", version = "2.7.0" }
+ *   app/build.gradle.kts: implementation(libs.coil)
  */
 @Composable
-fun QrCodePlaceholder(
-    content: String,
+fun QrCodeImage(
+    qrCodeUrl: String?,
     modifier: Modifier = Modifier,
     size: androidx.compose.ui.unit.Dp = 196.dp,
 ) {
-    // val bitmap = remember(content, size) { generateQrBitmap(content, size) }
-    // Image(bitmap.asImageBitmap(), contentDescription = "초대 QR",
-    //       modifier = modifier.size(size))
+    // AsyncImage(
+    //     model = qrCodeUrl,
+    //     contentDescription = "가족 초대 QR 코드",
+    //     modifier = modifier.size(size).clip(RoundedCornerShape(12.dp)),
+    // )
 
     Box(
         modifier = modifier
@@ -767,30 +770,17 @@ fun QrCodePlaceholder(
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text("QR", style = MaterialTheme.typography.headlineMedium, color = InkPlaceholder)
-            Spacer(Modifier.height(4.dp))
-            Text(
-                content,
-                style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp),
-                color = InkPlaceholder,
-            )
+            if (qrCodeUrl != null) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    qrCodeUrl.substringAfterLast('/'),
+                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp),
+                    color = InkPlaceholder,
+                )
+            }
         }
     }
 }
-
-/*
- * ZXing 을 추가한 뒤 사용할 QR 생성 함수
- *
- * private fun generateQrBitmap(content: String, size: Dp): Bitmap {
- *     val px = size.value.toInt() * 3
- *     val matrix = QRCodeWriter().encode(content, BarcodeFormat.QR_CODE, px, px)
- *     val bmp = Bitmap.createBitmap(px, px, Bitmap.Config.RGB_565)
- *     for (x in 0 until px) for (y in 0 until px) {
- *         bmp.setPixel(x, y, if (matrix[x, y]) android.graphics.Color.BLACK
- *                            else android.graphics.Color.WHITE)
- *     }
- *     return bmp
- * }
- */
 
 // ══════════════════════════════════════════════════════════════
 //  토글 · 토스트

@@ -8,37 +8,40 @@ import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.Multipart
+import retrofit2.http.PUT
 import retrofit2.http.POST
 import retrofit2.http.Part
 import retrofit2.http.Path
+import retrofit2.http.Query
 
 /**
  * ══════════════════════════════════════════════════════════════
- *  ⚠️ 이 파일은 API 명세 PDF 가 아니라 실제 서버 코드(IsFAM-main)를
- *     읽고 작성했습니다.
+ *  IsFam 서버 API — 2026-08-15 명세 기준
  *
- *  PDF 에 있던 다음 엔드포인트는 구현되어 있지 않습니다:
- *    /auth/phone/send, /auth/phone/verify, /me/voiceprint,
- *    /family/embeddings, /devices, /invitations,
- *    /call-events, /voice-analyses, /settings, /model-info
- *
- *  base URL 뒤에 /api/v1 이 붙습니다.
- *  인증이 필요한 것은 auth 라우트뿐이고, family/voice/demo 는
- *  현재 토큰 없이 호출됩니다.
+ *  base URL 뒤에 /api/v1 이 붙습니다. (/health 제외)
+ *  대부분의 엔드포인트가 인증(Bearer)을 요구하며,
+ *  일부는 X-Device-Id 헤더도 필수입니다. 둘 다 인터셉터가 자동 주입합니다.
  * ══════════════════════════════════════════════════════════════
  */
 interface IsFamApi {
 
-    // ── 헬스체크 (prefix 없음) ─────────────────────────────────
     @GET("health")
     suspend fun health(): HealthResponse
 
-    // ── 인증 ─────────────────────────────────────────────────
+    // ══ 인증 ══════════════════════════════════════════════════
     //
-    // SMS 발송이 없습니다. verification_code 는 "123456" 고정입니다.
-    // (서버 설정 auth_fixed_verification_code)
-    // 데모용 정책이라 프론트에서는 인증번호 입력 화면을 그대로 두되
-    // 기본값을 채워두면 시연이 매끄럽습니다.
+    // 휴대폰 인증은 2단계입니다.
+    //   ① phone/send   → verification_id 발급
+    //   ② phone/verify → phone_verification_token 발급 (5분 · 1회용)
+    //   ③ signup       → 위 토큰으로 가입
+    //
+    // 데모 환경에서는 실제 SMS 를 보내지 않고 코드가 123456 으로 고정입니다.
+
+    @POST("api/v1/auth/phone/send")
+    suspend fun sendVerificationCode(@Body body: PhoneSendRequest): PhoneSendResponse
+
+    @POST("api/v1/auth/phone/verify")
+    suspend fun verifyPhoneCode(@Body body: PhoneVerifyRequest): PhoneVerifyResponse
 
     @POST("api/v1/auth/signup")
     suspend fun signup(@Body body: SignupRequest): SignupResponse
@@ -46,93 +49,178 @@ interface IsFamApi {
     @POST("api/v1/auth/login")
     suspend fun login(@Body body: LoginRequest): LoginResponse
 
-    @POST("api/v1/auth/refresh")
-    suspend fun refresh(@Body body: RefreshRequest): TokenResponse
-
-    /** 204 No Content. Authorization 헤더 필요 */
     @POST("api/v1/auth/logout")
     suspend fun logout()
+
+    @POST("api/v1/auth/refresh")
+    suspend fun refresh(@Body body: RefreshRequest): TokenResponse
 
     @GET("api/v1/auth/me")
     suspend fun me(): MeResponse
 
-    // ── 가족 성문 등록 ────────────────────────────────────────
-    //
-    // PDF 의 /me/voiceprint 가 아니라 /family/register 입니다.
-    // sentence_id 개념이 없고, 이름·관계·오디오 파일을 함께 보냅니다.
-    // 같은 이름으로 여러 번 등록하면 샘플이 누적되는 구조입니다.
+    /** 닉네임 수정 */
+    @PUT("api/v1/auth/me")
+    suspend fun updateDisplayName(@Body body: UpdateDisplayNameRequest): UpdateDisplayNameResponse
 
-    @Multipart
-    @POST("api/v1/family/register")
-    suspend fun registerFamilyVoice(
-        @Part("name") name: RequestBody,
-        @Part("relation") relation: RequestBody,
-        @Part audioFile: MultipartBody.Part,
-    ): FamilyRegisterResponse
+    /** 회원 탈퇴 — PUT 입니다 (DELETE 아님) */
+    @PUT("api/v1/auth/me")
+    suspend fun withdraw(@Body body: WithdrawRequest)
+
+    // ══ 가족 공간 ═════════════════════════════════════════════
+
+    @POST("api/v1/family")
+    suspend fun createFamily(@Body body: CreateFamilyRequest): FamilyResponse
 
     @GET("api/v1/family")
-    suspend fun listFamily(): FamilyListResponse
+    suspend fun getFamily(): FamilyResponse
 
-    @GET("api/v1/family/{familyId}")
-    suspend fun getFamilyMember(@Path("familyId") familyId: Int): FamilyMemberResponse
+    @PUT("api/v1/family")
+    suspend fun renameFamily(@Body body: CreateFamilyRequest): RenameFamilyResponse
 
-    @DELETE("api/v1/family/{familyId}")
-    suspend fun deleteFamilyMember(@Path("familyId") familyId: Int): FamilyDeleteResponse
+    /** 공간 삭제. owner 만 가능하고 다른 멤버가 남아 있으면 409 */
+    @DELETE("api/v1/family")
+    suspend fun deleteFamily()
 
-    // ── ★ 통화 분석 — 이 앱의 핵심 엔드포인트 ──────────────────
+    /** 나가기(본인) 또는 내보내기(owner) */
+    @DELETE("api/v1/family/members/{userId}")
+    suspend fun removeMember(@Path("userId") userId: Int)
+
+    // ══ 목소리 등록 ═══════════════════════════════════════════
     //
-    // 통화 녹음 파일을 올리면
-    //   ① 등록된 가족 전원과 1:N 대조
-    //   ② 딥보이스 탐지
-    //   ③ 위험도 점수 + 등급 + 사유 문장
-    // 을 한 번에 돌려줍니다.
+    // 문장 3개를 각각 업로드합니다. 서버는 임베딩만 저장하고
+    // 원본 파일은 즉시 삭제합니다.
 
     @Multipart
-    @POST("api/v1/voice/verify")
-    suspend fun verifyVoice(
+    @POST("api/v1/me/voiceprint")
+    suspend fun registerVoiceprint(
+        @Part("sentence_id") sentenceId: RequestBody,
         @Part audioFile: MultipartBody.Part,
-    ): SecureVoiceVerificationResponse
+    ): VoiceprintResponse
 
-    /** 딥보이스 탐지 없이 가족 대조만 (더 빠름) */
-    @Multipart
-    @POST("api/v1/voice/verify-family")
-    suspend fun verifyFamily(
-        @Part audioFile: MultipartBody.Part,
-    ): VerifyFamilyResponse
+    /** 부모 폰에서 가족 구성원 임베딩 다운로드 */
+    @GET("api/v1/family/embeddings")
+    suspend fun getFamilyEmbeddings(
+        @Query("since") since: String? = null,
+    ): FamilyEmbeddingsResponse
 
-    /** 두 음성 1:1 비교 — 디버깅·테스트용 */
-    @Multipart
-    @POST("api/v1/voice/compare")
-    suspend fun compareVoice(
-        @Part audioFile1: MultipartBody.Part,
-        @Part audioFile2: MultipartBody.Part,
-    ): VoiceCompareResponse
+    @PUT("api/v1/devices/me/sync-status")
+    suspend fun updateSyncStatus(@Body body: SyncStatusRequest): SyncStatusResponse
 
-    // ── 딥보이스 단독 ─────────────────────────────────────────
+    // ══ 초대 ══════════════════════════════════════════════════
 
-    @GET("api/v1/anti-spoofing/model-info")
-    suspend fun antiSpoofingModelInfo(): AntiSpoofingModelInfoResponse
+    @POST("api/v1/family/invite-code")
+    suspend fun createInviteCode(): InviteCodeResponse
 
-    @Multipart
-    @POST("api/v1/anti-spoofing/detect")
-    suspend fun detectSpoofing(
-        @Part audioFile: MultipartBody.Part,
-    ): AntiSpoofingResponse
+    /** 코드가 없으면 200 + 전 필드 null */
+    @GET("api/v1/family/invite-code")
+    suspend fun getInviteCode(): InviteCodeResponse
 
-    // ── 데모 (real/fake 맞추기) ───────────────────────────────
+    @DELETE("api/v1/family/invite-code")
+    suspend fun deactivateInviteCode()
 
-    @POST("api/v1/demo/start")
-    suspend fun startDemo(): DemoStartResponse
+    /** 딥링크 진입 직후 호출. 인증 불필요 */
+    @GET("api/v1/invitations/{inviteCode}")
+    suspend fun previewInvitation(
+        @Path("inviteCode") inviteCode: String,
+    ): InvitePreviewResponse
 
-    @POST("api/v1/demo/{sessionId}/answer")
-    suspend fun answerDemo(
-        @Path("sessionId") sessionId: String,
-        @Body body: DemoAnswerRequest,
-    ): DemoAnswerResponse
+    @POST("api/v1/invitations/{inviteCode}/accept")
+    suspend fun acceptInvitation(
+        @Path("inviteCode") inviteCode: String,
+        @Body body: AcceptInvitationRequest,
+    ): AcceptInvitationResponse
+
+    // ══ 단말 ══════════════════════════════════════════════════
+
+    @POST("api/v1/devices")
+    suspend fun registerDevice(@Body body: RegisterDeviceRequest): RegisterDeviceResponse
+
+    @GET("api/v1/devices/me/capability")
+    suspend fun getCapability(): CapabilityResponse
+
+    @PUT("api/v1/devices/me/capability")
+    suspend fun updateCapability(@Body body: UpdateCapabilityRequest): UpdateCapabilityResponse
+
+    @PUT("api/v1/devices/me/push-token")
+    suspend fun updatePushToken(@Body body: PushTokenRequest): PushTokenResponse
+
+    @GET("api/v1/model-info")
+    suspend fun getModelInfo(): List<ModelInfoResponse>
+
+    // ══ 통화 이벤트 · 분석 ════════════════════════════════════
+
+    @POST("api/v1/call-events")
+    suspend fun createCallEvent(@Body body: CallEventRequest): CallEventResponse
+
+    @PUT("api/v1/call-events/{callEventId}")
+    suspend fun updateCallEvent(
+        @Path("callEventId") callEventId: Int,
+        @Body body: UpdateCallEventRequest,
+    ): CallEventResponse
+
+    /** 온디바이스 분석 결과 제출 */
+    @POST("api/v1/voice-analyses")
+    suspend fun submitAnalysis(@Body body: SubmitAnalysisRequest): AnalysisResponse
+
+    @GET("api/v1/voice-analyses/{analysisId}")
+    suspend fun getAnalysis(@Path("analysisId") analysisId: Long): AnalysisResponse
+
+    @GET("api/v1/voice-analyses")
+    suspend fun getAnalyses(
+        @Query("date_from") dateFrom: String? = null,
+        @Query("date_to") dateTo: String? = null,
+        @Query("final_decision") finalDecision: String? = null,
+        @Query("min_risk_level") minRiskLevel: Float? = null,
+        @Query("page") page: Int = 1,
+        @Query("page_size") pageSize: Int = 20,
+    ): AnalysisListResponse
+
+    @DELETE("api/v1/voice-analyses/{analysisId}")
+    suspend fun deleteAnalysis(@Path("analysisId") analysisId: Long)
+
+    // ══ 알림 ══════════════════════════════════════════════════
+
+    @GET("api/v1/notifications")
+    suspend fun getNotifications(
+        @Query("unread_only") unreadOnly: Boolean? = null,
+        @Query("page") page: Int = 1,
+        @Query("page_size") pageSize: Int = 20,
+    ): NotificationListResponse
+
+    @GET("api/v1/notifications/unread-count")
+    suspend fun getUnreadCount(): UnreadCountResponse
+
+    @PUT("api/v1/notifications/{notificationId}/read")
+    suspend fun markNotificationRead(
+        @Path("notificationId") notificationId: Long,
+    ): MarkReadResponse
+
+    // ══ 데모 ══════════════════════════════════════════════════
+
+    @POST("api/v1/demo-sessions")
+    suspend fun submitDemo(@Body body: DemoRequest): DemoResponse
+
+    @GET("api/v1/demo-sessions")
+    suspend fun getDemoSessions(
+        @Query("page") page: Int = 1,
+        @Query("page_size") pageSize: Int = 20,
+    ): DemoListResponse
+
+    // ══ 설정 ══════════════════════════════════════════════════
+
+    @GET("api/v1/settings")
+    suspend fun getSettings(): SettingsResponse
+
+    @PUT("api/v1/settings")
+    suspend fun updateSettings(@Body body: UpdateSettingsRequest): SettingsResponse
+
+    /** OS 권한 상태를 서버에 동기화 */
+    @PUT("api/v1/settings/permissions")
+    suspend fun syncPermissions(@Body body: SyncPermissionsRequest): SettingsResponse
 }
 
 // ══════════════════════════════════════════════════════════════
-//  DTO — 서버 Pydantic 스키마와 1:1 대응
+//  DTO
 // ══════════════════════════════════════════════════════════════
 
 @Serializable
@@ -141,19 +229,87 @@ data class HealthResponse(val status: String)
 // ─── 인증 ─────────────────────────────────────────────────────
 
 @Serializable
+data class PhoneSendRequest(
+    @SerialName("phone_number") val phoneNumber: String,
+)
+
+@Serializable
+data class PhoneSendResponse(
+    @SerialName("verification_id") val verificationId: String,
+    /** 유효시간 3분 */
+    @SerialName("expires_at") val expiresAt: String,
+)
+
+@Serializable
+data class PhoneVerifyRequest(
+    @SerialName("verification_id") val verificationId: String,
+    /** 데모 환경 고정값 "123456" */
+    @SerialName("verification_code") val verificationCode: String,
+)
+
+@Serializable
+data class PhoneVerifyResponse(
+    /**
+     * 가입·비밀번호 재설정에 사용하는 1회용 토큰.
+     * 5분간 유효하며 소비되면 즉시 폐기됩니다.
+     */
+    @SerialName("phone_verification_token") val phoneVerificationToken: String,
+    @SerialName("expires_at") val expiresAt: String,
+)
+
+/**
+ * 회원가입.
+ *
+ * 권한 필드는 가입 시점의 스냅샷입니다.
+ * 사용자가 OS 설정에서 언제든 바꿀 수 있으므로 이후에는
+ * PUT /settings/permissions 로 계속 동기화해야 합니다.
+ */
+@Serializable
 data class SignupRequest(
     @SerialName("phone_number") val phoneNumber: String,
+    @SerialName("phone_verification_token") val phoneVerificationToken: String,
+    val password: String,
+    /** 실명 */
+    @SerialName("user_name") val userName: String,
+    /** 앱 내 호칭 */
     @SerialName("display_name") val displayName: String,
-    /** 서버 고정값 "123456" */
-    @SerialName("verification_code") val verificationCode: String = "123456",
-    /** "child" 또는 "parent" */
-    val role: String,
+
+    @SerialName("terms_agreed") val termsAgreed: Boolean,
+    @SerialName("voice_print_agreed") val voicePrintAgreed: Boolean,
+    @SerialName("marketing_agreed") val marketingAgreed: Boolean = false,
+
+    @SerialName("notification_permission") val notificationPermission: Boolean = false,
+    @SerialName("microphone_permission") val microphonePermission: Boolean = false,
+    @SerialName("file_permission") val filePermission: Boolean = false,
+    /**
+     * ⚠️ 앱이 확인할 수 없는 값입니다.
+     * 삼성 전화 앱 설정이라 읽기·제어가 불가능합니다 (실기기 검증 완료).
+     * 사용자가 "설정했어요"를 누른 자기 신고값이며, 실제 동작 여부는
+     * 첫 통화 후 녹음 파일이 생겨야 확인됩니다.
+     */
+    @SerialName("call_recording_enabled") val callRecordingEnabled: Boolean = false,
+)
+
+@Serializable
+data class SignupResponse(
+    @SerialName("user_id") val userId: Int,
+    @SerialName("display_name") val displayName: String,
+    @SerialName("device_id") val deviceId: Int? = null,
+    @SerialName("access_token") val accessToken: String,
+    @SerialName("refresh_token") val refreshToken: String,
 )
 
 @Serializable
 data class LoginRequest(
     @SerialName("phone_number") val phoneNumber: String,
-    @SerialName("verification_code") val verificationCode: String = "123456",
+    val password: String,
+)
+
+@Serializable
+data class LoginResponse(
+    @SerialName("user_id") val userId: Int,
+    @SerialName("access_token") val accessToken: String,
+    @SerialName("refresh_token") val refreshToken: String,
 )
 
 @Serializable
@@ -162,270 +318,413 @@ data class RefreshRequest(
 )
 
 @Serializable
-open class TokenResponse(
+data class TokenResponse(
     @SerialName("access_token") val accessToken: String,
     @SerialName("refresh_token") val refreshToken: String,
-)
-
-@Serializable
-data class SignupResponse(
-    @SerialName("access_token") val accessToken: String,
-    @SerialName("refresh_token") val refreshToken: String,
-    @SerialName("user_id") val userId: Int,
-    @SerialName("display_name") val displayName: String,
-    val role: String,
-)
-
-@Serializable
-data class LoginResponse(
-    @SerialName("access_token") val accessToken: String,
-    @SerialName("refresh_token") val refreshToken: String,
-    @SerialName("user_id") val userId: Int,
-    val role: String,
 )
 
 @Serializable
 data class MeResponse(
     @SerialName("user_id") val userId: Int,
     @SerialName("display_name") val displayName: String,
+    /** 마스킹된 형태로 옵니다 — "010****1234" */
     @SerialName("phone_number") val phoneNumber: String,
-    val role: String,
     @SerialName("created_at") val createdAt: String,
 )
+
+@Serializable
+data class UpdateDisplayNameRequest(
+    @SerialName("display_name") val displayName: String,
+)
+
+@Serializable
+data class UpdateDisplayNameResponse(
+    @SerialName("user_id") val userId: Int,
+    @SerialName("display_name") val displayName: String,
+    @SerialName("updated_at") val updatedAt: String,
+)
+
+@Serializable
+data class WithdrawRequest(val password: String)
 
 // ─── 가족 ─────────────────────────────────────────────────────
 
 @Serializable
-data class FamilyRegisterResponse(
+data class CreateFamilyRequest(val name: String)
+
+@Serializable
+data class FamilyResponse(
     @SerialName("family_id") val familyId: Int,
     val name: String,
-    val relation: String,
-    @SerialName("model_name") val modelName: String,
-    val message: String,
+    /** "owner" 또는 "member" */
+    @SerialName("my_member_role") val myMemberRole: String,
+    val members: List<FamilyMemberDto> = emptyList(),
+    @SerialName("created_at") val createdAt: String? = null,
 )
 
 @Serializable
-data class FamilyMemberResponse(
+data class FamilyMemberDto(
+    @SerialName("user_id") val userId: Int,
+    @SerialName("display_name") val displayName: String,
+    @SerialName("member_role") val memberRole: String = "member",
+    @SerialName("voiceprint_registered") val voiceprintRegistered: Boolean,
+    @SerialName("protection_enabled") val protectionEnabled: Boolean,
+    @SerialName("joined_at") val joinedAt: String,
+)
+
+@Serializable
+data class RenameFamilyResponse(
     @SerialName("family_id") val familyId: Int,
     val name: String,
-    val relation: String,
-    @SerialName("model_name") val modelName: String,
+    @SerialName("updated_at") val updatedAt: String,
+)
+
+// ─── 목소리 등록 ──────────────────────────────────────────────
+
+@Serializable
+data class VoiceprintResponse(
+    @SerialName("voiceprint_registered") val voiceprintRegistered: Boolean,
+    @SerialName("embedding_model_version") val embeddingModelVersion: String,
+    @SerialName("sample_count") val sampleCount: Int,
+    @SerialName("registered_at") val registeredAt: String,
 )
 
 @Serializable
-data class FamilyListResponse(val members: List<FamilyMemberResponse>)
+data class FamilyEmbeddingsResponse(
+    @SerialName("embedding_model_version") val embeddingModelVersion: String,
+    @SerialName("synced_at") val syncedAt: String,
+    val members: List<EmbeddingMemberDto> = emptyList(),
+    /** since 이후 탈퇴·강퇴·음성삭제된 멤버 ID */
+    @SerialName("removed_user_ids") val removedUserIds: List<Int> = emptyList(),
+)
 
 @Serializable
-data class FamilyDeleteResponse(
+data class EmbeddingMemberDto(
+    @SerialName("user_id") val userId: Int,
+    @SerialName("display_name") val displayName: String,
+    /** base64 로 인코딩된 암호화 벡터. Keystore 에 저장해야 합니다. */
+    val embedding: String,
+    @SerialName("updated_at") val updatedAt: String,
+)
+
+@Serializable
+data class SyncStatusRequest(
+    @SerialName("synced_at") val syncedAt: String,
+    /** "push" | "joined" | "periodic" | "foreground" */
+    @SerialName("sync_trigger") val syncTrigger: String,
+)
+
+@Serializable
+data class SyncStatusResponse(
+    @SerialName("device_id") val deviceId: Int,
+    @SerialName("embedding_synced_at") val embeddingSyncedAt: String,
+    @SerialName("sync_trigger") val syncTrigger: String,
+)
+
+// ─── 초대 ─────────────────────────────────────────────────────
+
+@Serializable
+data class InviteCodeResponse(
+    @SerialName("invite_id") val inviteId: Int? = null,
+    /** 6자리 영숫자 — "AB12CD" */
+    @SerialName("invite_code") val inviteCode: String? = null,
+    @SerialName("invite_link") val inviteLink: String? = null,
+    /** 서버가 QR 이미지를 만들어 줍니다. 앱에서 생성할 필요 없습니다. */
+    @SerialName("qr_code_url") val qrCodeUrl: String? = null,
+    /** 만료 72시간 */
+    @SerialName("expires_at") val expiresAt: String? = null,
+    @SerialName("rotated_at") val rotatedAt: String? = null,
+) {
+    val hasActiveCode: Boolean get() = inviteCode != null
+}
+
+@Serializable
+data class InvitePreviewResponse(
+    @SerialName("invite_code") val inviteCode: String,
+    @SerialName("family_name") val familyName: String,
+    @SerialName("member_count") val memberCount: Int,
+    @SerialName("expires_at") val expiresAt: String,
+)
+
+@Serializable
+data class AcceptInvitationRequest(
+    @SerialName("voice_sharing_consent") val voiceSharingConsent: Boolean,
+)
+
+@Serializable
+data class AcceptInvitationResponse(
     @SerialName("family_id") val familyId: Int,
-    val message: String,
-)
-
-// ─── 음질 ─────────────────────────────────────────────────────
-
-@Serializable
-data class AudioQualityDto(
-    @SerialName("is_analyzable") val isAnalyzable: Boolean,
-    val message: String,
-    @SerialName("duration_seconds") val durationSeconds: Double,
-    @SerialName("rms_energy") val rmsEnergy: Double,
-    @SerialName("peak_amplitude") val peakAmplitude: Double,
-    @SerialName("speech_ratio") val speechRatio: Double,
-)
-
-// ─── 가족 대조 (1:N) ──────────────────────────────────────────
-
-@Serializable
-data class FamilyCandidateDto(
-    @SerialName("family_id") val familyId: Int,
-    val name: String,
-    val relation: String,
-    val similarity: Double,
-    @SerialName("sample_count") val sampleCount: Int = 1,
-    @SerialName("max_similarity") val maxSimilarity: Double? = null,
-    @SerialName("mean_similarity") val meanSimilarity: Double? = null,
-    @SerialName("median_similarity") val medianSimilarity: Double? = null,
-    @SerialName("weighted_mean_similarity") val weightedMeanSimilarity: Double? = null,
-    @SerialName("weighted_median_similarity") val weightedMedianSimilarity: Double? = null,
-    @SerialName("profile_threshold") val profileThreshold: Double? = null,
-    @SerialName("confidence_score") val confidenceScore: Double? = null,
-    @SerialName("sample_quality") val sampleQuality: String? = null,
-    @SerialName("low_quality_sample_count") val lowQualitySampleCount: Int = 0,
-)
-
-@Serializable
-data class VerifyFamilyResponse(
-    @SerialName("is_registered_family") val isRegisteredFamily: Boolean,
-    /** 등록된 가족이 없으면 null */
-    @SerialName("best_match") val bestMatch: FamilyCandidateDto? = null,
-    val threshold: Double,
-    /** 전원과의 유사도. 1:N 대조 결과 전체 */
-    val candidates: List<FamilyCandidateDto> = emptyList(),
-    val message: String,
-    @SerialName("model_name") val modelName: String,
-)
-
-@Serializable
-data class VoiceCompareResponse(
-    val similarity: Double,
-    val threshold: Double,
-    @SerialName("is_same_speaker") val isSameSpeaker: Boolean,
-    val message: String,
-    @SerialName("model_name") val modelName: String,
-)
-
-// ─── 딥보이스 ─────────────────────────────────────────────────
-
-@Serializable
-data class LabelScoreDto(val label: String, val score: Double)
-
-@Serializable
-data class AntiSpoofingResponse(
-    @SerialName("analysis_status") val analysisStatus: String? = null,
-    @SerialName("processing_time_ms") val processingTimeMs: Double? = null,
-    @SerialName("is_spoofed") val isSpoofed: Boolean,
-    @SerialName("spoof_score") val spoofScore: Double,
-    val threshold: Double,
-    @SerialName("predicted_label") val predictedLabel: String,
-    @SerialName("predicted_score") val predictedScore: Double,
-    val message: String,
-    @SerialName("model_name") val modelName: String,
-    @SerialName("analyzed_segments") val analyzedSegments: Int = 0,
-    @SerialName("max_spoof_segment_index") val maxSpoofSegmentIndex: Int = 0,
-    @SerialName("segment_seconds") val segmentSeconds: Double = 0.0,
-    @SerialName("label_scores") val labelScores: List<LabelScoreDto> = emptyList(),
-    @SerialName("audio_quality") val audioQuality: AudioQualityDto? = null,
-)
-
-@Serializable
-data class AntiSpoofingModelInfoResponse(
+    @SerialName("family_name") val familyName: String,
+    @SerialName("user_id") val userId: Int,
+    @SerialName("display_name") val displayName: String,
+    @SerialName("member_role") val memberRole: String,
     val status: String,
-    @SerialName("model_name") val modelName: String,
-    @SerialName("model_version") val modelVersion: String,
-    val device: String,
-    val threshold: Double,
-    @SerialName("sample_rate") val sampleRate: Int,
-    @SerialName("max_audio_seconds") val maxAudioSeconds: Double,
-    @SerialName("window_seconds") val windowSeconds: Double,
-    @SerialName("hop_seconds") val hopSeconds: Double,
-    @SerialName("batch_size") val batchSize: Int,
-    @SerialName("max_concurrency") val maxConcurrency: Int,
-    @SerialName("warmed_up") val warmedUp: Boolean,
+    @SerialName("joined_at") val joinedAt: String,
 )
 
-// ─── ★ 통합 분석 결과 ─────────────────────────────────────────
+// ─── 단말 ─────────────────────────────────────────────────────
 
 @Serializable
-data class SecureVoiceVerificationResponse(
-    /** "complete" 또는 "more_voice_required" */
-    @SerialName("analysis_status") val analysisStatus: String,
-    @SerialName("is_trusted") val isTrusted: Boolean,
-    /** "safe" | "caution" | "danger" */
-    @SerialName("risk_level") val riskLevel: String,
-    /** ⚠️ 0~100 이 아니라 0.0~1.0 입니다 */
-    @SerialName("risk_score") val riskScore: Double,
-    @SerialName("family_confidence") val familyConfidence: Double,
-    @SerialName("mismatch_confidence") val mismatchConfidence: Double,
-    /** 6가지 값. Decision.from() 참고 */
+data class RegisterDeviceRequest(
+    /** "android" 또는 "ios" */
+    val platform: String,
+    val manufacturer: String,
+    @SerialName("device_model") val deviceModel: String,
+    @SerialName("os_version") val osVersion: String,
+    @SerialName("push_token") val pushToken: String,
+)
+
+@Serializable
+data class RegisterDeviceResponse(
+    @SerialName("device_id") val deviceId: Int,
+    @SerialName("call_recording_supported") val callRecordingSupported: Boolean,
+)
+
+@Serializable
+data class CapabilityResponse(
+    @SerialName("call_recording_supported") val callRecordingSupported: Boolean,
+    @SerialName("guidance_required") val guidanceRequired: Boolean,
+    @SerialName("guidance_url") val guidanceUrl: String? = null,
+)
+
+@Serializable
+data class UpdateCapabilityRequest(
+    @SerialName("call_recording_supported") val callRecordingSupported: Boolean,
+)
+
+@Serializable
+data class UpdateCapabilityResponse(
+    @SerialName("device_id") val deviceId: Int,
+    @SerialName("call_recording_supported") val callRecordingSupported: Boolean,
+)
+
+@Serializable
+data class PushTokenRequest(
+    @SerialName("push_token") val pushToken: String,
+)
+
+@Serializable
+data class PushTokenResponse(
+    @SerialName("device_id") val deviceId: Int,
+    @SerialName("push_token") val pushToken: String,
+)
+
+@Serializable
+data class ModelInfoResponse(
+    @SerialName("latest_model_version") val latestModelVersion: String,
+    @SerialName("min_supported_version") val minSupportedVersion: String,
+    @SerialName("update_required") val updateRequired: Boolean,
+    @SerialName("download_url") val downloadUrl: String? = null,
+)
+
+// ─── 통화 이벤트 ──────────────────────────────────────────────
+
+@Serializable
+data class CallEventRequest(
+    @SerialName("detected_at") val detectedAt: String,
+)
+
+@Serializable
+data class CallEventResponse(
+    @SerialName("call_event_id") val callEventId: Int,
+    /** "detected" | "analyzed_on_device" | "skipped" | "failed" */
+    @SerialName("local_analysis_status") val localAnalysisStatus: String,
+    @SerialName("voice_analysis_id") val voiceAnalysisId: Long? = null,
+)
+
+@Serializable
+data class UpdateCallEventRequest(
+    @SerialName("local_analysis_status") val localAnalysisStatus: String,
+    @SerialName("voice_analysis_id") val voiceAnalysisId: Long? = null,
+)
+
+// ─── 분석 결과 ────────────────────────────────────────────────
+
+/**
+ * 온디바이스 분석 결과 제출.
+ *
+ * ⚠️ 현재 앱은 온디바이스 추론이 없습니다.
+ *    서버 분석 경로(오디오 업로드)가 명세에 없으므로
+ *    백엔드와 협의가 필요합니다.
+ */
+@Serializable
+data class SubmitAnalysisRequest(
+    @SerialName("call_event_id") val callEventId: Int,
+    @SerialName("matched_family_id") val matchedFamilyId: Int? = null,
+    @SerialName("similarity_score") val similarityScore: Float,
+    @SerialName("spoof_score") val spoofScore: Float,
+    /** 0~100 */
+    @SerialName("risk_level") val riskLevel: Float,
+    /** "normal" | "needs_check" | "danger" */
     @SerialName("final_decision") val finalDecision: String,
-    /** 사용자에게 보여줄 판정 사유. 한국어 문장 */
-    @SerialName("decision_reasons") val decisionReasons: List<String> = emptyList(),
-    @SerialName("processing_time_ms") val processingTimeMs: Double,
-    @SerialName("family_model_time_ms") val familyModelTimeMs: Double,
-    @SerialName("anti_spoofing_model_time_ms") val antiSpoofingModelTimeMs: Double,
-    @SerialName("audio_quality") val audioQuality: AudioQualityDto,
-    @SerialName("family_verification") val familyVerification: VerifyFamilyResponse,
-    @SerialName("anti_spoofing") val antiSpoofing: AntiSpoofingResponse,
+    @SerialName("on_device_model_version") val onDeviceModelVersion: String,
+    @SerialName("analyzed_at") val analyzedAt: String,
+)
+
+@Serializable
+data class AnalysisResponse(
+    @SerialName("analysis_id") val analysisId: Long,
+    @SerialName("matched_family") val matchedFamily: MatchedFamilyDto? = null,
+    @SerialName("matched_member") val matchedMember: MatchedFamilyDto? = null,
+    @SerialName("similarity_score") val similarityScore: Float,
+    @SerialName("spoof_score") val spoofScore: Float,
+    /** 0~100 */
+    @SerialName("risk_level") val riskLevel: Float,
+    @SerialName("final_decision") val finalDecision: String,
+    @SerialName("submitted_at") val submittedAt: String,
+)
+
+@Serializable
+data class MatchedFamilyDto(
+    @SerialName("family_id") val familyId: Int? = null,
+    @SerialName("user_id") val userId: Int? = null,
+    val name: String? = null,
+    @SerialName("display_name") val displayName: String? = null,
+) {
+    val label: String get() = displayName ?: name ?: "알 수 없음"
+}
+
+@Serializable
+data class AnalysisListResponse(
+    val items: List<AnalysisResponse> = emptyList(),
+    val page: Int = 1,
+    @SerialName("page_size") val pageSize: Int = 20,
+    val total: Int = 0,
+)
+
+// ─── 알림 ─────────────────────────────────────────────────────
+
+@Serializable
+data class NotificationListResponse(
+    val items: List<NotificationDto> = emptyList(),
+    @SerialName("unread_count") val unreadCount: Int = 0,
+    val page: Int = 1,
+    @SerialName("page_size") val pageSize: Int = 20,
+    val total: Int = 0,
+)
+
+@Serializable
+data class NotificationDto(
+    @SerialName("notification_id") val notificationId: Long,
+    /** "danger_call" 등 */
+    val type: String,
+    val title: String,
+    val body: String,
+    /** "voice_analysis" | "none" — none 이면 탭해도 이동하지 않습니다 */
+    @SerialName("target_type") val targetType: String,
+    @SerialName("target_id") val targetId: Long? = null,
+    @SerialName("read_at") val readAt: String? = null,
+    @SerialName("created_at") val createdAt: String,
+) {
+    val isRead: Boolean get() = readAt != null
+    val isNavigable: Boolean get() = targetType != "none" && targetId != null
+}
+
+@Serializable
+data class UnreadCountResponse(
+    @SerialName("unread_count") val unreadCount: Int,
+)
+
+@Serializable
+data class MarkReadResponse(
+    @SerialName("notification_id") val notificationId: Long,
+    @SerialName("read_at") val readAt: String,
 )
 
 // ─── 데모 ─────────────────────────────────────────────────────
 
 @Serializable
-data class DemoStartResponse(
-    @SerialName("session_id") val sessionId: String,
-    @SerialName("audio_url") val audioUrl: String,
-    @SerialName("playback_seconds") val playbackSeconds: Int,
-    val message: String,
-)
-
-@Serializable
-data class DemoAnswerRequest(
+data class DemoRequest(
     /** "real" 또는 "fake" */
     @SerialName("user_guess") val userGuess: String,
+    @SerialName("ai_result") val aiResult: String,
 )
 
 @Serializable
-data class DemoAnswerResponse(
-    @SerialName("session_id") val sessionId: String,
+data class DemoResponse(
+    @SerialName("demo_session_id") val demoSessionId: Long,
+    @SerialName("is_correct") val isCorrect: Boolean,
+)
+
+@Serializable
+data class DemoListResponse(
+    val items: List<DemoItemDto> = emptyList(),
+    val page: Int = 1,
+    @SerialName("page_size") val pageSize: Int = 20,
+    val total: Int = 0,
+)
+
+@Serializable
+data class DemoItemDto(
+    @SerialName("demo_session_id") val demoSessionId: Long,
     @SerialName("user_guess") val userGuess: String,
-    @SerialName("actual_label") val actualLabel: String,
-    @SerialName("is_user_correct") val isUserCorrect: Boolean,
-    @SerialName("ai_guess") val aiGuess: String,
-    @SerialName("is_ai_correct") val isAiCorrect: Boolean,
-    @SerialName("anti_spoofing") val antiSpoofing: AntiSpoofingResponse,
-    val message: String,
+    @SerialName("ai_result") val aiResult: String,
+    @SerialName("is_correct") val isCorrect: Boolean,
+    @SerialName("created_at") val createdAt: String,
+)
+
+// ─── 설정 ─────────────────────────────────────────────────────
+
+@Serializable
+data class SettingsResponse(
+    @SerialName("notification_enabled") val notificationEnabled: Boolean,
+    val permissions: PermissionStatusDto,
+)
+
+@Serializable
+data class PermissionStatusDto(
+    @SerialName("notification_permission") val notificationPermission: Boolean,
+    @SerialName("microphone_permission") val microphonePermission: Boolean,
+    @SerialName("file_permission") val filePermission: Boolean,
+)
+
+@Serializable
+data class UpdateSettingsRequest(
+    @SerialName("notification_enabled") val notificationEnabled: Boolean,
+)
+
+@Serializable
+data class SyncPermissionsRequest(
+    @SerialName("notification_permission") val notificationPermission: Boolean,
+    @SerialName("microphone_permission") val microphonePermission: Boolean,
+    @SerialName("file_permission") val filePermission: Boolean,
+    @SerialName("battery_optimization_ignored") val batteryOptimizationIgnored: Boolean,
 )
 
 // ══════════════════════════════════════════════════════════════
-//  UI 모델 변환
-//
-//  화면에서 문자열 리터럴("danger")을 직접 비교하지 마세요.
-//  서버가 값을 바꾸면 33개 화면을 다 뒤져야 합니다.
+//  에러 코드
 // ══════════════════════════════════════════════════════════════
 
-enum class RiskLevel { SAFE, CAUTION, DANGER, INSUFFICIENT;
-    companion object {
-        fun from(riskLevel: String, analysisStatus: String): RiskLevel =
-            when {
-                analysisStatus != "complete" -> INSUFFICIENT
-                riskLevel == "safe" -> SAFE
-                riskLevel == "caution" -> CAUTION
-                riskLevel == "danger" -> DANGER
-                else -> INSUFFICIENT
-            }
-    }
-}
+@Serializable
+data class ApiErrorResponse(
+    @SerialName("error_code") val errorCode: String? = null,
+    val message: String? = null,
+)
 
-/** 서버 final_decision 6종 */
-enum class Decision(val serverValue: String, val userMessage: String) {
-    TrustedFamily("trusted_family_voice", "등록된 가족의 목소리가 맞아요"),
-    SpoofedFamilyLike("spoofed_family_like_voice", "가족 목소리를 흉내 낸 AI 합성음으로 보여요"),
-    SpoofedUnknown("spoofed_unknown_voice", "AI로 만들어진 목소리로 보여요"),
-    UnregisteredDetected("unregistered_voice_detected", "등록된 가족이 아닌 목소리예요"),
-    NeedsConfirmation("family_voice_needs_confirmation", "확인이 필요해요"),
-    UnknownReal("unknown_real_voice", "등록되지 않은 실제 사람의 목소리예요"),
-    Unmapped("", "판정할 수 없어요");
+/** 서버 error_code 를 사용자 문구로 매핑합니다. */
+enum class ApiError(val code: String, val message: String) {
+    AuthNotRegistered("AUTH_001", "등록되지 않은 번호예요"),
+    AuthTokenExpired("AUTH_002", "다시 로그인해 주세요"),
+    AuthDuplicatePhone("AUTH_003", "이미 가입된 번호예요"),
+    AuthWrongCode("AUTH_004", "인증번호가 일치하지 않아요"),
+    AuthResendLimit("AUTH_005", "재발송 횟수를 초과했어요. 잠시 후 다시 시도해 주세요"),
+    AuthCodeExpired("AUTH_006", "인증 시간이 지났어요. 다시 받아주세요"),
+
+    FamilyNotFound("FAMILY_001", "가족 정보를 찾을 수 없어요"),
+    FamilyNoSpace("FAMILY_002", "가족 공간이 없어요"),
+    FamilyNotOwner("FAMILY_003", "가족 공간 관리자만 할 수 있어요"),
+    FamilyLeaveBlocked("FAMILY_005", "먼저 다른 가족을 모두 내보내야 해요"),
+    FamilyDeleteBlocked("FAMILY_007", "남은 가족이 있어 삭제할 수 없어요"),
+
+    InviteInvalid("INVITE_001", "만료되었거나 잘못된 초대 코드예요"),
+    VoiceQuality("VOICE_001", "음성 품질이 기준에 미달해요. 다시 녹음해 주세요"),
+    DeviceUnsupported("DEVICE_001", "현재 기기에서는 보호 기능을 사용할 수 없어요"),
+    ModelOutdated("MODEL_001", "앱을 최신 버전으로 업데이트해 주세요"),
+
+    Unknown("", "잠시 후 다시 시도해 주세요");
 
     companion object {
-        fun from(value: String): Decision =
-            entries.firstOrNull { it.serverValue == value } ?: Unmapped
-    }
-}
-
-/** 화면이 쓰는 최종 모델 */
-data class AnalysisUiModel(
-    val riskLevel: RiskLevel,
-    val decision: Decision,
-    /** 0~100 으로 변환된 값 (서버는 0.0~1.0) */
-    val riskPercent: Int,
-    val matchedName: String?,
-    val similarity: Double,
-    val spoofScore: Double,
-    val reasons: List<String>,
-    val isAnalyzable: Boolean,
-    val elapsedMs: Long,
-) {
-    companion object {
-        fun from(res: SecureVoiceVerificationResponse) = AnalysisUiModel(
-            riskLevel = RiskLevel.from(res.riskLevel, res.analysisStatus),
-            decision = Decision.from(res.finalDecision),
-            riskPercent = (res.riskScore * 100).toInt().coerceIn(0, 100),
-            matchedName = res.familyVerification.bestMatch?.name,
-            similarity = res.familyVerification.bestMatch?.similarity ?: 0.0,
-            spoofScore = res.antiSpoofing.spoofScore,
-            reasons = res.decisionReasons,
-            isAnalyzable = res.analysisStatus == "complete",
-            elapsedMs = res.processingTimeMs.toLong(),
-        )
+        fun from(code: String?): ApiError =
+            entries.firstOrNull { it.code == code } ?: Unknown
     }
 }

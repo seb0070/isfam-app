@@ -42,7 +42,7 @@ import com.isfam.core.designsystem.KakaoShareButton
 import com.isfam.core.designsystem.LabelBrown
 import com.isfam.core.designsystem.Mascot
 import com.isfam.core.designsystem.MascotImage
-import com.isfam.core.designsystem.QrCodePlaceholder
+import com.isfam.core.designsystem.QrCodeImage
 import com.isfam.core.designsystem.StepProgressBar
 import com.isfam.core.designsystem.Tint50
 import com.isfam.core.designsystem.White
@@ -62,6 +62,7 @@ import com.isfam.core.designsystem.White
 @Composable
 fun FamilyInviteRoute(
     inviteCode: String,
+    qrCodeUrl: String?,
     expiresInText: String,
     onSkip: (() -> Unit)? = null,
     onBack: () -> Unit,
@@ -73,6 +74,7 @@ fun FamilyInviteRoute(
     FamilyInviteScreen(
         inviteCode = inviteCode,
         inviteLink = link,
+        qrCodeUrl = qrCodeUrl,
         expiresInText = expiresInText,
         isReentry = isReentry,
         onCopyCode = { clipboard.setText(AnnotatedString(inviteCode)) },
@@ -88,6 +90,7 @@ fun FamilyInviteRoute(
 fun FamilyInviteScreen(
     inviteCode: String,
     inviteLink: String,
+    qrCodeUrl: String?,
     expiresInText: String,
     isReentry: Boolean,
     onCopyCode: () -> Unit,
@@ -166,8 +169,8 @@ fun FamilyInviteScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(if (isReentry) 12.dp else 16.dp),
             ) {
-                QrCodePlaceholder(
-                    content = inviteLink,
+                QrCodeImage(
+                    qrCodeUrl = qrCodeUrl,
                     size = if (isReentry) 142.dp else 196.dp,
                 )
 
@@ -229,7 +232,7 @@ private fun formatCode(code: String): String =
 @Composable
 private fun FamilyInvitePreview() = IsFamTheme {
     FamilyInviteScreen(
-        inviteCode = "F7K2M9", inviteLink = "isfam.app/join/F7K-2M9",
+        inviteCode = "AB12CD", inviteLink = "isfam.app/i/AB12CD", qrCodeUrl = null,
         expiresInText = "유효시간 23시간 58분 남음", isReentry = false,
         onCopyCode = {}, onCopyLink = {}, onKakaoShare = {}, onSkip = {}, onBack = {},
     )
@@ -239,7 +242,7 @@ private fun FamilyInvitePreview() = IsFamTheme {
 @Composable
 private fun FamilyInviteReentryPreview() = IsFamTheme {
     FamilyInviteScreen(
-        inviteCode = "F7K2M9", inviteLink = "isfam.app/join/F7K-2M9",
+        inviteCode = "AB12CD", inviteLink = "isfam.app/i/AB12CD", qrCodeUrl = null,
         expiresInText = "유효시간 23시간 58분 남음", isReentry = true,
         onCopyCode = {}, onCopyLink = {}, onKakaoShare = {}, onSkip = null, onBack = {},
     )

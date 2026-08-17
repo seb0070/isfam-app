@@ -115,7 +115,7 @@ fun PermissionRoute(
                 ),
                 // ⚠️ 앱이 확인할 수 없는 값입니다. 자동녹음 안내 화면에서
                 //    사용자가 "설정했어요"를 누르면 true 가 됩니다.
-                autoRecording = session.autoRecordingEnabled,
+                callRecording = session.callRecordingEnabled,
             )
             // TODO: POST /api/v1/auth/signup — session 을 SignupRequest 로 변환
             onSignUpComplete()
