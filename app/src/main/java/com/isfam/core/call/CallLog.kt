@@ -35,7 +35,8 @@ internal object CallLog {
      */
     fun mask(identity: CallerIdentity): String = when (identity) {
         is CallerIdentity.ContactName ->
-            identity.name.take(1) + "*".repeat((identity.name.length - 1).coerceAtLeast(1))
+            // 이름이 길어도 별표를 3개로 고정합니다. 길이 자체도 정보이므로
+            identity.name.take(1) + "***"
 
         is CallerIdentity.PhoneNumber -> {
             val digits = identity.number.filter(Char::isDigit)

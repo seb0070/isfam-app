@@ -62,17 +62,37 @@ sealed interface CallerIdentity {
 /**
  * 통화 녹음 파일명 파서.
  *
- * 실측 예시
- *   통화 막내딸_260809_133433.m4a      → ContactName("막내딸")
- *   통화 01076352857_260809_135255.m4a → PhoneNumber("01076352857")
+ * 실측 예시 (기기·One UI 버전에 따라 접두어가 다릅니다)
+ *   통화 녹음 01000000000_260817_130530.m4a → PhoneNumber("01000000000")
+ *   통화 막내딸_260809_133433.m4a           → ContactName("막내딸")
+ *   Call 01012345678_260817_130530.m4a      → PhoneNumber("01012345678")
+ *
+ * 접두어를 고정하지 않고 "뒤쪽 타임스탬프"를 기준으로 자릅니다.
+ * 접두어 목록에 없는 문구가 나와도 동작하게 하기 위해서입니다.
  */
 object CallRecordingNameParser {
 
-    /** "통화 {정체}_{YYMMDD}_{HHMMSS}" — 로케일에 따라 접두어가 다를 수 있습니다 */
-    private val SAMSUNG_FORMAT = Regex("""^(?:통화|Call)\s+(.+?)_(\d{6})_(\d{6})""")
+    /**
+     * 파일명 "끝"의 YYMMDD_HHMMSS 를 앵커로 잡고 그 앞을 정체로 봅니다.
+     *
+     * ⚠️ 반드시 끝($)에 고정해야 합니다.
+     *    앞에서부터 찾으면 01000000000 같은 11자리 번호의 뒷부분을
+     *    타임스탬프로 잘못 읽습니다. (실제로 겪은 버그)
+     *
+     * 구분자가 _ 인지 공백인지도 기기마다 달라 [_ ]* 로 받습니다.
+     *   실측: "통화 녹음 01000000000_260817 _130530"
+     */
+    private val TIMESTAMP_ANCHOR =
+        Regex("""^(.*?)[_ ]*(\d{6})[_ ]*(\d{6})\s*$""")
 
-    /** 접두어가 다른 기기용 폴백 — 뒤쪽 타임스탬프만 잡습니다 */
-    private val TIMESTAMP_ONLY = Regex("""(.+?)_(\d{6})_(\d{6})""")
+    /**
+     * 알려진 접두어. 정체 앞에 붙은 것만 제거합니다.
+     * 긴 것부터 시도해야 "통화 녹음"이 "통화"로 잘리지 않습니다.
+     */
+    private val PREFIXES = listOf(
+        "통화 녹음", "전화 녹음", "통화녹음", "음성 녹음",
+        "Call recording", "Voice call", "통화", "Call",
+    )
 
     private val KR_MOBILE = Regex("""01[016789][-_. ]?\d{3,4}[-_. ]?\d{4}""")
     private val KR_LANDLINE = Regex("""0\d{1,2}[-_. ]?\d{3,4}[-_. ]?\d{4}""")
@@ -81,18 +101,11 @@ object CallRecordingNameParser {
         DateTimeFormatter.ofPattern("yyMMdd_HHmmss", Locale.KOREA)
 
     fun parse(fileName: String): Pair<CallerIdentity, LocalDateTime?> {
-        val match = SAMSUNG_FORMAT.find(fileName)
-            ?: TIMESTAMP_ONLY.find(fileName)
-            ?: return extractNumberOnly(fileName) to null
+        val base = fileName.substringBeforeLast('.')
+        val match = TIMESTAMP_ANCHOR.find(base)
+            ?: return extractNumberOnly(base) to null
 
-        val raw = match.groupValues[1]
-            .removePrefix("통화").removePrefix("Call").trim()
-
-        val identity = when {
-            raw.isBlank() -> CallerIdentity.Unknown
-            isPhoneNumber(raw) -> CallerIdentity.PhoneNumber(raw)
-            else -> CallerIdentity.ContactName(raw)
-        }
+        val identity = toIdentity(stripPrefix(match.groupValues[1]))
 
         val startedAt = runCatching {
             LocalDateTime.parse(
@@ -104,12 +117,33 @@ object CallRecordingNameParser {
         return identity to startedAt
     }
 
-    private fun extractNumberOnly(fileName: String): CallerIdentity {
-        val number = KR_MOBILE.find(fileName)?.value
-            ?: KR_LANDLINE.find(fileName)?.value
-        return if (number != null) CallerIdentity.PhoneNumber(number)
-        else CallerIdentity.Unknown
+    /** 접두어를 제거합니다. 긴 것부터 확인해 부분 일치를 피합니다. */
+    private fun stripPrefix(raw: String): String {
+        var text = raw.trim()
+        for (prefix in PREFIXES.sortedByDescending { it.length }) {
+            if (text.startsWith(prefix, ignoreCase = true)) {
+                text = text.removePrefix(text.take(prefix.length))
+                break
+            }
+        }
+        return text.trim().trim('_', '-', ' ')
     }
+
+    private fun toIdentity(raw: String): CallerIdentity = when {
+        raw.isBlank() -> CallerIdentity.Unknown
+        isPhoneNumber(raw) -> CallerIdentity.PhoneNumber(raw)
+        // 접두어 목록에 없는 문구가 남았지만 안에 번호가 있는 경우
+        containsPhoneNumber(raw) -> CallerIdentity.PhoneNumber(extractNumber(raw)!!)
+        else -> CallerIdentity.ContactName(raw)
+    }
+
+    private fun extractNumberOnly(text: String): CallerIdentity =
+        extractNumber(text)?.let { CallerIdentity.PhoneNumber(it) } ?: CallerIdentity.Unknown
+
+    private fun extractNumber(text: String): String? =
+        KR_MOBILE.find(text)?.value ?: KR_LANDLINE.find(text)?.value
+
+    private fun containsPhoneNumber(text: String): Boolean = extractNumber(text) != null
 
     private fun isPhoneNumber(text: String): Boolean =
         KR_MOBILE.matches(text) || KR_LANDLINE.matches(text)
