@@ -19,6 +19,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -27,13 +28,17 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
 import androidx.compose.ui.unit.sp
 import com.isfam.core.designsystem.FieldHelper
 import com.isfam.core.designsystem.IconTintEnd
 import com.isfam.core.designsystem.IconTintStart
 import com.isfam.core.designsystem.Ink
 import com.isfam.core.designsystem.InkBody2
+import com.isfam.core.rememberAppContainer
 import com.isfam.core.designsystem.InviteCodeInput
+import com.isfam.data.api.ApiError
+import com.isfam.data.repository.ApiFailure
 import com.isfam.core.designsystem.IsFamButton
 import com.isfam.core.designsystem.IsFamScaffold
 import com.isfam.core.designsystem.IsFamTheme
@@ -55,8 +60,9 @@ import com.isfam.core.designsystem.White
  */
 enum class CodeError(val message: String) {
     Expired("만료된 초대 코드예요. 가족에게 새 코드를 요청해 주세요."),
-    NotFound("존재하지 않는 코드예요. 다시 확인해 주세요."),
+    NotFound("만료되었거나 존재하지 않는 코드예요. 다시 확인해 주세요."),
     AlreadyJoined("이미 참여한 가족 공간이에요."),
+    Unknown("코드를 확인하지 못했어요. 잠시 후 다시 시도해 주세요."),
 }
 
 @Composable
@@ -64,6 +70,9 @@ fun InviteCodeInputRoute(
     onVerified: (code: String) -> Unit,
     onBack: () -> Unit,
 ) {
+    val familyRepo = rememberAppContainer().familyRepository
+    val scope = rememberCoroutineScope()
+
     var code by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<CodeError?>(null) }
     var checking by remember { mutableStateOf(false) }
@@ -77,9 +86,24 @@ fun InviteCodeInputRoute(
             error = null
         },
         onSubmit = {
-            // TODO: GET /api/v1/invitations/{code} 로 유효성 확인
-            checking = true
-            onVerified(code)
+            scope.launch {
+                checking = true
+                error = null
+
+                // 수락 전에 미리보기로 유효성만 확인합니다.
+                // 바로 수락하면 잘못 입력한 코드로도 남의 가족에
+                // 들어가게 되므로, 어느 가족인지 보여주고 동의를 받습니다.
+                familyRepo.previewInvitation(code.uppercase())
+                    .onSuccess { onVerified(code.uppercase()) }
+                    .onFailure {
+                        error = when ((it as? ApiFailure)?.error) {
+                            ApiError.InviteInvalid -> CodeError.NotFound
+                            ApiError.InviteAlreadyMember -> CodeError.AlreadyJoined
+                            else -> CodeError.Unknown
+                        }
+                    }
+                checking = false
+            }
         },
         onBack = onBack,
     )

@@ -255,20 +255,20 @@ interface IsFamApi {
 // ══════════════════════════════════════════════════════════════
 
 @Serializable
-data class HealthResponse(val status: String)
+data class HealthResponse(val status: String = "")
 
 // ─── 인증 ─────────────────────────────────────────────────────
 
 @Serializable
 data class PhoneSendRequest(
-    @SerialName("phone_number") val phoneNumber: String,
+    @SerialName("phone_number") val phoneNumber: String = "",
 )
 
 @Serializable
 data class PhoneSendResponse(
-    @SerialName("verification_id") val verificationId: String,
+    @SerialName("verification_id") val verificationId: String = "",
     /** 유효시간 3분 */
-    @SerialName("expires_at") val expiresAt: String,
+    @SerialName("expires_at") val expiresAt: String = "",
 )
 
 @Serializable
@@ -284,8 +284,8 @@ data class PhoneVerifyResponse(
      * 가입·비밀번호 재설정에 사용하는 1회용 토큰.
      * 5분간 유효하며 소비되면 즉시 폐기됩니다.
      */
-    @SerialName("phone_verification_token") val phoneVerificationToken: String,
-    @SerialName("expires_at") val expiresAt: String,
+    @SerialName("phone_verification_token") val phoneVerificationToken: String = "",
+    @SerialName("expires_at") val expiresAt: String = "",
 )
 
 /**
@@ -323,11 +323,11 @@ data class SignupRequest(
 
 @Serializable
 data class SignupResponse(
-    @SerialName("user_id") val userId: Int,
-    @SerialName("display_name") val displayName: String,
+    @SerialName("user_id") val userId: Int = 0,
+    @SerialName("display_name") val displayName: String = "",
     @SerialName("device_id") val deviceId: Int? = null,
-    @SerialName("access_token") val accessToken: String,
-    @SerialName("refresh_token") val refreshToken: String,
+    @SerialName("access_token") val accessToken: String = "",
+    @SerialName("refresh_token") val refreshToken: String = "",
 )
 
 @Serializable
@@ -338,9 +338,9 @@ data class LoginRequest(
 
 @Serializable
 data class LoginResponse(
-    @SerialName("user_id") val userId: Int,
-    @SerialName("access_token") val accessToken: String,
-    @SerialName("refresh_token") val refreshToken: String,
+    @SerialName("user_id") val userId: Int = 0,
+    @SerialName("access_token") val accessToken: String = "",
+    @SerialName("refresh_token") val refreshToken: String = "",
 )
 
 @Serializable
@@ -350,17 +350,17 @@ data class RefreshRequest(
 
 @Serializable
 data class TokenResponse(
-    @SerialName("access_token") val accessToken: String,
-    @SerialName("refresh_token") val refreshToken: String,
+    @SerialName("access_token") val accessToken: String = "",
+    @SerialName("refresh_token") val refreshToken: String = "",
 )
 
 @Serializable
 data class MeResponse(
-    @SerialName("user_id") val userId: Int,
-    @SerialName("display_name") val displayName: String,
+    @SerialName("user_id") val userId: Int = 0,
+    @SerialName("display_name") val displayName: String = "",
     /** 마스킹된 형태로 옵니다 — "010****1234" */
-    @SerialName("phone_number") val phoneNumber: String,
-    @SerialName("created_at") val createdAt: String,
+    @SerialName("phone_number") val phoneNumber: String = "",
+    @SerialName("created_at") val createdAt: String = "",
 )
 
 @Serializable
@@ -370,9 +370,9 @@ data class UpdateDisplayNameRequest(
 
 @Serializable
 data class UpdateDisplayNameResponse(
-    @SerialName("user_id") val userId: Int,
-    @SerialName("display_name") val displayName: String,
-    @SerialName("updated_at") val updatedAt: String,
+    @SerialName("user_id") val userId: Int = 0,
+    @SerialName("display_name") val displayName: String = "",
+    @SerialName("updated_at") val updatedAt: String = "",
 )
 
 @Serializable
@@ -385,29 +385,41 @@ data class CreateFamilyRequest(val name: String)
 
 @Serializable
 data class FamilyResponse(
-    @SerialName("family_id") val familyId: Int,
-    val name: String,
+    @SerialName("family_id") val familyId: Int = 0,
+    val name: String = "",
     /** "owner" 또는 "member" */
-    @SerialName("my_member_role") val myMemberRole: String,
+    @SerialName("my_member_role") val myMemberRole: String = "member",
     val members: List<FamilyMemberDto> = emptyList(),
     @SerialName("created_at") val createdAt: String? = null,
 )
 
+/**
+ * 가족 구성원.
+ *
+ * ⚠️ 기본값을 반드시 넣어야 합니다.
+ *    Kotlin serialization 은 필수 필드가 응답에 없으면 예외를 던지고,
+ *    그러면 200/201 을 받고도 앱이 실패로 처리합니다.
+ *    (protection_enabled 를 필수로 뒀다가 실제로 겪은 문제)
+ *
+ *    서버가 나중에 필드를 빼거나 이름을 바꿔도 앱이 죽지 않도록
+ *    응답 DTO 는 기본값을 두는 편이 안전합니다.
+ */
 @Serializable
 data class FamilyMemberDto(
-    @SerialName("user_id") val userId: Int,
-    @SerialName("display_name") val displayName: String,
+    @SerialName("user_id") val userId: Int = 0,
+    @SerialName("display_name") val displayName: String = "",
     @SerialName("member_role") val memberRole: String = "member",
-    @SerialName("voiceprint_registered") val voiceprintRegistered: Boolean,
-    @SerialName("protection_enabled") val protectionEnabled: Boolean,
-    @SerialName("joined_at") val joinedAt: String,
+    @SerialName("voiceprint_registered") val voiceprintRegistered: Boolean = false,
+    /** 서버 응답에 없는 필드입니다. 앱 내부 표시용으로만 씁니다 */
+    @SerialName("protection_enabled") val protectionEnabled: Boolean = true,
+    @SerialName("joined_at") val joinedAt: String = "",
 )
 
 @Serializable
 data class RenameFamilyResponse(
-    @SerialName("family_id") val familyId: Int,
-    val name: String,
-    @SerialName("updated_at") val updatedAt: String,
+    @SerialName("family_id") val familyId: Int = 0,
+    val name: String = "",
+    @SerialName("updated_at") val updatedAt: String = "",
 )
 
 // ─── 목소리 등록 ──────────────────────────────────────────────
@@ -445,7 +457,7 @@ data class AudioQualityRequest(
 
 @Serializable
 data class VoiceprintRegisterResponse(
-    @SerialName("voiceprint_registered") val voiceprintRegistered: Boolean,
+    @SerialName("voiceprint_registered") val voiceprintRegistered: Boolean = false,
     @SerialName("embedding_model_version") val embeddingModelVersion: String? = null,
     @SerialName("sample_count") val sampleCount: Int = 0,
     @SerialName("registered_at") val registeredAt: String? = null,
@@ -453,7 +465,7 @@ data class VoiceprintRegisterResponse(
 
 @Serializable
 data class VoiceprintStatusResponse(
-    @SerialName("voiceprint_registered") val voiceprintRegistered: Boolean,
+    @SerialName("voiceprint_registered") val voiceprintRegistered: Boolean = false,
     @SerialName("embedding_model_version") val embeddingModelVersion: String? = null,
     @SerialName("sample_count") val sampleCount: Int = 0,
     val samples: List<VoiceprintSampleDto> = emptyList(),
@@ -463,14 +475,14 @@ data class VoiceprintStatusResponse(
 /** quality 가 "review" 면 앱이 재녹음을 유도합니다 */
 @Serializable
 data class VoiceprintSampleDto(
-    @SerialName("sentence_id") val sentenceId: Int,
-    val quality: String,
+    @SerialName("sentence_id") val sentenceId: Int = 0,
+    val quality: String = "",
 )
 
 @Serializable
 data class FamilyEmbeddingsResponse(
-    @SerialName("embedding_model_version") val embeddingModelVersion: String,
-    @SerialName("synced_at") val syncedAt: String,
+    @SerialName("embedding_model_version") val embeddingModelVersion: String = "",
+    @SerialName("synced_at") val syncedAt: String = "",
     val members: List<EmbeddingMemberDto> = emptyList(),
     /** since 이후 탈퇴·강퇴·음성삭제된 멤버 ID */
     @SerialName("removed_user_ids") val removedUserIds: List<Int> = emptyList(),
@@ -478,11 +490,11 @@ data class FamilyEmbeddingsResponse(
 
 @Serializable
 data class EmbeddingMemberDto(
-    @SerialName("user_id") val userId: Int,
-    @SerialName("display_name") val displayName: String,
+    @SerialName("user_id") val userId: Int = 0,
+    @SerialName("display_name") val displayName: String = "",
     /** base64 로 인코딩된 암호화 벡터. Keystore 에 저장해야 합니다. */
-    val embedding: String,
-    @SerialName("updated_at") val updatedAt: String,
+    val embedding: String = "",
+    @SerialName("updated_at") val updatedAt: String = "",
 )
 
 @Serializable
@@ -494,9 +506,9 @@ data class SyncStatusRequest(
 
 @Serializable
 data class SyncStatusResponse(
-    @SerialName("device_id") val deviceId: Int,
-    @SerialName("embedding_synced_at") val embeddingSyncedAt: String,
-    @SerialName("sync_trigger") val syncTrigger: String,
+    @SerialName("device_id") val deviceId: Int = 0,
+    @SerialName("embedding_synced_at") val embeddingSyncedAt: String = "",
+    @SerialName("sync_trigger") val syncTrigger: String = "",
 )
 
 // ─── 초대 ─────────────────────────────────────────────────────
@@ -518,10 +530,10 @@ data class InviteCodeResponse(
 
 @Serializable
 data class InvitePreviewResponse(
-    @SerialName("invite_code") val inviteCode: String,
-    @SerialName("family_name") val familyName: String,
-    @SerialName("member_count") val memberCount: Int,
-    @SerialName("expires_at") val expiresAt: String,
+    @SerialName("invite_code") val inviteCode: String = "",
+    @SerialName("family_name") val familyName: String = "",
+    @SerialName("member_count") val memberCount: Int = 0,
+    @SerialName("expires_at") val expiresAt: String = "",
 )
 
 @Serializable
@@ -531,13 +543,13 @@ data class AcceptInvitationRequest(
 
 @Serializable
 data class AcceptInvitationResponse(
-    @SerialName("family_id") val familyId: Int,
-    @SerialName("family_name") val familyName: String,
-    @SerialName("user_id") val userId: Int,
-    @SerialName("display_name") val displayName: String,
-    @SerialName("member_role") val memberRole: String,
-    val status: String,
-    @SerialName("joined_at") val joinedAt: String,
+    @SerialName("family_id") val familyId: Int = 0,
+    @SerialName("family_name") val familyName: String = "",
+    @SerialName("user_id") val userId: Int = 0,
+    @SerialName("display_name") val displayName: String = "",
+    @SerialName("member_role") val memberRole: String = "",
+    val status: String = "",
+    @SerialName("joined_at") val joinedAt: String = "",
 )
 
 // ─── 단말 ─────────────────────────────────────────────────────
@@ -554,14 +566,14 @@ data class RegisterDeviceRequest(
 
 @Serializable
 data class RegisterDeviceResponse(
-    @SerialName("device_id") val deviceId: Int,
-    @SerialName("call_recording_supported") val callRecordingSupported: Boolean,
+    @SerialName("device_id") val deviceId: Int = 0,
+    @SerialName("call_recording_supported") val callRecordingSupported: Boolean = false,
 )
 
 @Serializable
 data class CapabilityResponse(
-    @SerialName("call_recording_supported") val callRecordingSupported: Boolean,
-    @SerialName("guidance_required") val guidanceRequired: Boolean,
+    @SerialName("call_recording_supported") val callRecordingSupported: Boolean = false,
+    @SerialName("guidance_required") val guidanceRequired: Boolean = false,
     @SerialName("guidance_url") val guidanceUrl: String? = null,
 )
 
@@ -572,8 +584,8 @@ data class UpdateCapabilityRequest(
 
 @Serializable
 data class UpdateCapabilityResponse(
-    @SerialName("device_id") val deviceId: Int,
-    @SerialName("call_recording_supported") val callRecordingSupported: Boolean,
+    @SerialName("device_id") val deviceId: Int = 0,
+    @SerialName("call_recording_supported") val callRecordingSupported: Boolean = false,
 )
 
 @Serializable
@@ -583,15 +595,15 @@ data class PushTokenRequest(
 
 @Serializable
 data class PushTokenResponse(
-    @SerialName("device_id") val deviceId: Int,
-    @SerialName("push_token") val pushToken: String,
+    @SerialName("device_id") val deviceId: Int = 0,
+    @SerialName("push_token") val pushToken: String = "",
 )
 
 @Serializable
 data class ModelInfoResponse(
-    @SerialName("latest_model_version") val latestModelVersion: String,
-    @SerialName("min_supported_version") val minSupportedVersion: String,
-    @SerialName("update_required") val updateRequired: Boolean,
+    @SerialName("latest_model_version") val latestModelVersion: String = "",
+    @SerialName("min_supported_version") val minSupportedVersion: String = "",
+    @SerialName("update_required") val updateRequired: Boolean = false,
     @SerialName("download_url") val downloadUrl: String? = null,
 )
 
@@ -604,9 +616,9 @@ data class CallEventRequest(
 
 @Serializable
 data class CallEventResponse(
-    @SerialName("call_event_id") val callEventId: Int,
+    @SerialName("call_event_id") val callEventId: Int = 0,
     /** "detected" | "analyzed_on_device" | "skipped" | "failed" */
-    @SerialName("local_analysis_status") val localAnalysisStatus: String,
+    @SerialName("local_analysis_status") val localAnalysisStatus: String = "",
     @SerialName("voice_analysis_id") val voiceAnalysisId: Long? = null,
 )
 
@@ -641,15 +653,15 @@ data class SubmitAnalysisRequest(
 
 @Serializable
 data class AnalysisResponse(
-    @SerialName("analysis_id") val analysisId: Long,
+    @SerialName("analysis_id") val analysisId: Long = 0L,
     @SerialName("matched_family") val matchedFamily: MatchedFamilyDto? = null,
     @SerialName("matched_member") val matchedMember: MatchedFamilyDto? = null,
-    @SerialName("similarity_score") val similarityScore: Float,
-    @SerialName("spoof_score") val spoofScore: Float,
+    @SerialName("similarity_score") val similarityScore: Float = 0f,
+    @SerialName("spoof_score") val spoofScore: Float = 0f,
     /** 0~100 */
-    @SerialName("risk_level") val riskLevel: Float,
-    @SerialName("final_decision") val finalDecision: String,
-    @SerialName("submitted_at") val submittedAt: String,
+    @SerialName("risk_level") val riskLevel: Float = 0f,
+    @SerialName("final_decision") val finalDecision: String = "",
+    @SerialName("submitted_at") val submittedAt: String = "",
 )
 
 @Serializable
@@ -677,13 +689,13 @@ data class AntiSpoofingResponse(
     /** "complete" 또는 "more_voice_required" */
     @SerialName("analysis_status") val analysisStatus: String? = null,
     @SerialName("processing_time_ms") val processingTimeMs: Double? = null,
-    @SerialName("is_spoofed") val isSpoofed: Boolean,
-    @SerialName("spoof_score") val spoofScore: Double,
-    val threshold: Double,
-    @SerialName("predicted_label") val predictedLabel: String,
-    @SerialName("predicted_score") val predictedScore: Double,
-    val message: String,
-    @SerialName("model_name") val modelName: String,
+    @SerialName("is_spoofed") val isSpoofed: Boolean = false,
+    @SerialName("spoof_score") val spoofScore: Double = 0.0,
+    val threshold: Double = 0.0,
+    @SerialName("predicted_label") val predictedLabel: String = "",
+    @SerialName("predicted_score") val predictedScore: Double = 0.0,
+    val message: String = "",
+    @SerialName("model_name") val modelName: String = "",
     @SerialName("analyzed_segments") val analyzedSegments: Int = 0,
     @SerialName("max_spoof_segment_index") val maxSpoofSegmentIndex: Int = 0,
     @SerialName("segment_seconds") val segmentSeconds: Double = 0.0,
@@ -692,33 +704,33 @@ data class AntiSpoofingResponse(
 )
 
 @Serializable
-data class LabelScoreDto(val label: String, val score: Double)
+data class LabelScoreDto(val label: String = "", val score: Double = 0.0)
 
 /** 서버가 판정한 음질. 앱의 AudioPipeline 검사와 별개입니다. */
 @Serializable
 data class AudioQualityDto(
-    @SerialName("is_analyzable") val isAnalyzable: Boolean,
-    val message: String,
-    @SerialName("duration_seconds") val durationSeconds: Double,
-    @SerialName("rms_energy") val rmsEnergy: Double,
-    @SerialName("peak_amplitude") val peakAmplitude: Double,
-    @SerialName("speech_ratio") val speechRatio: Double,
+    @SerialName("is_analyzable") val isAnalyzable: Boolean = false,
+    val message: String = "",
+    @SerialName("duration_seconds") val durationSeconds: Double = 0.0,
+    @SerialName("rms_energy") val rmsEnergy: Double = 0.0,
+    @SerialName("peak_amplitude") val peakAmplitude: Double = 0.0,
+    @SerialName("speech_ratio") val speechRatio: Double = 0.0,
 )
 
 @Serializable
 data class AntiSpoofingModelInfoResponse(
-    val status: String,
-    @SerialName("model_name") val modelName: String,
-    @SerialName("model_version") val modelVersion: String,
-    val device: String,
-    val threshold: Double,
-    @SerialName("sample_rate") val sampleRate: Int,
-    @SerialName("max_audio_seconds") val maxAudioSeconds: Double,
-    @SerialName("window_seconds") val windowSeconds: Double,
-    @SerialName("hop_seconds") val hopSeconds: Double,
-    @SerialName("batch_size") val batchSize: Int,
-    @SerialName("max_concurrency") val maxConcurrency: Int,
-    @SerialName("warmed_up") val warmedUp: Boolean,
+    val status: String = "",
+    @SerialName("model_name") val modelName: String = "",
+    @SerialName("model_version") val modelVersion: String = "",
+    val device: String = "",
+    val threshold: Double = 0.0,
+    @SerialName("sample_rate") val sampleRate: Int = 0,
+    @SerialName("max_audio_seconds") val maxAudioSeconds: Double = 0.0,
+    @SerialName("window_seconds") val windowSeconds: Double = 0.0,
+    @SerialName("hop_seconds") val hopSeconds: Double = 0.0,
+    @SerialName("batch_size") val batchSize: Int = 0,
+    @SerialName("max_concurrency") val maxConcurrency: Int = 0,
+    @SerialName("warmed_up") val warmedUp: Boolean = false,
 )
 
 // ─── 알림 ─────────────────────────────────────────────────────
@@ -734,16 +746,16 @@ data class NotificationListResponse(
 
 @Serializable
 data class NotificationDto(
-    @SerialName("notification_id") val notificationId: Long,
+    @SerialName("notification_id") val notificationId: Long = 0L,
     /** "danger_call" 등 */
-    val type: String,
-    val title: String,
-    val body: String,
+    val type: String = "",
+    val title: String = "",
+    val body: String = "",
     /** "voice_analysis" | "none" — none 이면 탭해도 이동하지 않습니다 */
-    @SerialName("target_type") val targetType: String,
+    @SerialName("target_type") val targetType: String = "",
     @SerialName("target_id") val targetId: Long? = null,
     @SerialName("read_at") val readAt: String? = null,
-    @SerialName("created_at") val createdAt: String,
+    @SerialName("created_at") val createdAt: String = "",
 ) {
     val isRead: Boolean get() = readAt != null
     val isNavigable: Boolean get() = targetType != "none" && targetId != null
@@ -751,13 +763,13 @@ data class NotificationDto(
 
 @Serializable
 data class UnreadCountResponse(
-    @SerialName("unread_count") val unreadCount: Int,
+    @SerialName("unread_count") val unreadCount: Int = 0,
 )
 
 @Serializable
 data class MarkReadResponse(
-    @SerialName("notification_id") val notificationId: Long,
-    @SerialName("read_at") val readAt: String,
+    @SerialName("notification_id") val notificationId: Long = 0L,
+    @SerialName("read_at") val readAt: String = "",
 )
 
 // ─── 데모 ─────────────────────────────────────────────────────
@@ -771,8 +783,8 @@ data class DemoRequest(
 
 @Serializable
 data class DemoResponse(
-    @SerialName("demo_session_id") val demoSessionId: Long,
-    @SerialName("is_correct") val isCorrect: Boolean,
+    @SerialName("demo_session_id") val demoSessionId: Long = 0L,
+    @SerialName("is_correct") val isCorrect: Boolean = false,
 )
 
 @Serializable
@@ -785,26 +797,26 @@ data class DemoListResponse(
 
 @Serializable
 data class DemoItemDto(
-    @SerialName("demo_session_id") val demoSessionId: Long,
-    @SerialName("user_guess") val userGuess: String,
-    @SerialName("ai_result") val aiResult: String,
-    @SerialName("is_correct") val isCorrect: Boolean,
-    @SerialName("created_at") val createdAt: String,
+    @SerialName("demo_session_id") val demoSessionId: Long = 0L,
+    @SerialName("user_guess") val userGuess: String = "",
+    @SerialName("ai_result") val aiResult: String = "",
+    @SerialName("is_correct") val isCorrect: Boolean = false,
+    @SerialName("created_at") val createdAt: String = "",
 )
 
 // ─── 설정 ─────────────────────────────────────────────────────
 
 @Serializable
 data class SettingsResponse(
-    @SerialName("notification_enabled") val notificationEnabled: Boolean,
-    val permissions: PermissionStatusDto,
+    @SerialName("notification_enabled") val notificationEnabled: Boolean = false,
+    val permissions: PermissionStatusDto = PermissionStatusDto(),
 )
 
 @Serializable
 data class PermissionStatusDto(
-    @SerialName("notification_permission") val notificationPermission: Boolean,
-    @SerialName("microphone_permission") val microphonePermission: Boolean,
-    @SerialName("file_permission") val filePermission: Boolean,
+    @SerialName("notification_permission") val notificationPermission: Boolean = false,
+    @SerialName("microphone_permission") val microphonePermission: Boolean = false,
+    @SerialName("file_permission") val filePermission: Boolean = false,
 )
 
 @Serializable
@@ -842,8 +854,8 @@ data class ApiErrorResponse(
 
 @Serializable
 data class FieldError(
-    val field: String,
-    val reason: String,
+    val field: String = "",
+    val reason: String = "",
 )
 
 /**

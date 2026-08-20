@@ -29,6 +29,7 @@ import com.isfam.core.designsystem.IsFamOutlinedButton
 import com.isfam.feature.auth.LoginRoute
 import com.isfam.core.designsystem.MainTab
 import com.isfam.core.designsystem.IsFamToast
+import com.isfam.data.repository.InviteCode
 import com.isfam.feature.family.FamilyCreateRoute
 import com.isfam.feature.family.FamilyManageRoute
 import com.isfam.feature.family.FamilyMemberItem
@@ -37,9 +38,9 @@ import com.isfam.feature.family.FamilyEntryRoute
 import com.isfam.feature.family.FamilyInviteRoute
 import com.isfam.feature.family.InviteAcceptRoute
 import com.isfam.feature.family.InviteCodeInputRoute
-import com.isfam.feature.family.InvitePreview
 import com.isfam.feature.auth.SignUpSession
 import com.isfam.feature.auth.SignUpRoute
+import com.isfam.core.rememberAppContainer
 import com.isfam.core.permission.SettingsIntents
 import com.isfam.feature.history.HistoryDetailRoute
 import com.isfam.feature.history.HistoryRoute
@@ -222,6 +223,17 @@ fun IsFamNavHost(
             )
         }
         composable<Route.FamilyEntry> {
+            // 이미 소속된 공간이 있으면 홈으로 보냅니다.
+            // 이 검사가 없으면 만들기 화면에 들어가 FAMILY_004 를 만납니다.
+            val container = rememberAppContainer()
+            LaunchedEffect(Unit) {
+                container.familyRepository.getFamily().onSuccess {
+                    navController.navigate(Route.Home) {
+                        popUpTo(Route.FamilyEntry) { inclusive = true }
+                    }
+                }
+            }
+
             FamilyEntryRoute(
                 onCreate = { navController.navigate(Route.FamilyCreate) },
                 onJoin = { navController.navigate(Route.InviteCodeInput) },
@@ -230,16 +242,32 @@ fun IsFamNavHost(
         composable<Route.FamilyCreate> {
             FamilyCreateRoute(
                 ownerName = signUpSession.userName.ifBlank { "회원" },
-                onCreated = { navController.navigate(Route.FamilyInvite) },
+                onCreated = { _ ->
+                    navController.navigate(Route.FamilyInvite) {
+                        // 뒤로가기로 만들기 화면에 돌아오면
+                        // 이미 만든 공간을 또 만들려다 FAMILY_004 가 납니다
+                        popUpTo(Route.FamilyCreate) { inclusive = true }
+                    }
+                },
                 onBack = { navController.popBackStack() },
             )
         }
         composable<Route.FamilyInvite> {
+            // 화면에 들어올 때 코드를 발급받습니다.
+            // 기존 코드가 있으면 서버가 무효화하고 새로 줍니다.
+            val container = rememberAppContainer()
+            var invite by remember { mutableStateOf<InviteCode?>(null) }
+
+            LaunchedEffect(Unit) {
+                container.familyRepository.createInviteCode()
+                    .onSuccess { invite = it }
+            }
+
             FamilyInviteRoute(
-                // TODO: POST /api/v1/family/invite-code 응답으로 교체
-                inviteCode = "AB12CD",
-                qrCodeUrl = null,
-                expiresInText = "유효시간 71시간 58분 남음",
+                inviteCode = invite?.code ?: "······",
+                qrCodeUrl = invite?.qrCodeUrl,
+                expiresInText = if (invite == null) "코드를 만드는 중…"
+                else "유효시간 72시간",
                 onSkip = {
                     navController.navigate(Route.Home) {
                         popUpTo(Route.FamilyEntry) { inclusive = true }
@@ -267,14 +295,9 @@ fun IsFamNavHost(
         composable<Route.InviteAccept> { entry ->
             val args = entry.toRoute<Route.InviteAccept>()
             InviteAcceptRoute(
-                // TODO: GET /api/v1/invitations/{code} 응답으로 교체
-                preview = InvitePreview(
-                    inviterName = "김상호",
-                    spaceName = "김서연님의 가족 공간",
-                    memberInitials = listOf("상", "서"),
-                    enteredByLink = args.inviteCode.isBlank(),
-                ),
+                inviteCode = args.inviteCode,
                 myInitial = signUpSession.displayName.take(1).ifBlank { "나" },
+                enteredByLink = args.inviteCode.isBlank(),
                 onAccepted = {
                     navController.navigate(Route.VoiceIntro) {
                         popUpTo(Route.FamilyEntry) { inclusive = true }

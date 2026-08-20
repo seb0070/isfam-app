@@ -19,6 +19,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -26,10 +27,16 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.sp
 import com.isfam.core.designsystem.Amber500
 import com.isfam.core.designsystem.Ink
+import com.isfam.core.rememberAppContainer
+import com.isfam.core.designsystem.Danger
 import com.isfam.core.designsystem.IsFamButton
+import com.isfam.data.api.ApiError
+import com.isfam.data.repository.ApiFailure
 import com.isfam.core.designsystem.IsFamScaffold
 import com.isfam.core.designsystem.IsFamTextField
 import com.isfam.core.designsystem.IsFamTheme
@@ -52,13 +59,44 @@ fun FamilyCreateRoute(
     onCreated: (spaceName: String) -> Unit,
     onBack: () -> Unit,
 ) {
+    val familyRepo = rememberAppContainer().familyRepository
+    val scope = rememberCoroutineScope()
+
     var name by remember { mutableStateOf("${ownerName}님의 가족 공간") }
+    var submitting by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
 
     FamilyCreateScreen(
         spaceName = name,
-        onSpaceNameChange = { name = it },
-        // TODO: POST /api/v1/family 연결
-        onCreate = { onCreated(name) },
+        submitting = submitting,
+        errorMessage = errorMessage,
+        onSpaceNameChange = {
+            name = it
+            errorMessage = null
+        },
+        onCreate = {
+            scope.launch {
+                submitting = true
+                errorMessage = null
+
+                familyRepo.createFamily(name.trim())
+                    .onSuccess { onCreated(it.name) }
+                    .onFailure { error ->
+                        // 이미 공간이 있으면(FAMILY_004) 실패로 막지 않고
+                        // 그대로 다음 단계로 보냅니다. 사용자가 두 번 눌렀거나
+                        // 뒤로가기로 되돌아온 경우이므로 목적은 이미 달성됐습니다.
+                        if ((error as? ApiFailure)?.error == ApiError.FamilyAlreadyJoined) {
+                            familyRepo.getFamily()
+                                .onSuccess { onCreated(it.name) }
+                                .onFailure { errorMessage = "가족 공간을 불러오지 못했어요" }
+                        } else {
+                            errorMessage = (error as? ApiFailure)?.displayMessage
+                                ?: "가족 공간을 만들지 못했어요"
+                        }
+                    }
+                submitting = false
+            }
+        },
         onBack = onBack,
     )
 }
@@ -66,6 +104,8 @@ fun FamilyCreateRoute(
 @Composable
 fun FamilyCreateScreen(
     spaceName: String,
+    submitting: Boolean = false,
+    errorMessage: String? = null,
     onSpaceNameChange: (String) -> Unit,
     onCreate: () -> Unit,
     onBack: () -> Unit,
@@ -81,10 +121,20 @@ fun FamilyCreateScreen(
         },
         bottomBar = {
             IsFamButton(
-                text = "가족 공간 만들고 초대하기",
+                text = if (submitting) "만드는 중…" else "가족 공간 만들고 초대하기",
                 onClick = onCreate,
-                enabled = spaceName.isNotBlank(),
+                enabled = !submitting && spaceName.isNotBlank(),
             )
+            errorMessage?.let {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    it,
+                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.5.sp),
+                    color = Danger,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
         },
     ) {
         Column(
