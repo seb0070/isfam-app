@@ -97,7 +97,7 @@ fun LoginRoute(
                     .onFailure {
                         // 가입되지 않은 번호인지 비밀번호가 틀렸는지
                         // 서버가 구분해 주므로 그대로 보여줍니다.
-                        errorMessage = (it as? ApiFailure)?.error?.message
+                        errorMessage = (it as? ApiFailure)?.displayMessage
                             ?: "로그인하지 못했어요. 잠시 후 다시 시도해 주세요"
                     }
                 submitting = false

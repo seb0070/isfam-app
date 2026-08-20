@@ -79,6 +79,16 @@ private const val OTP_LENGTH = 6
 private const val OTP_TIMEOUT_SEC = 180
 private const val MIN_PASSWORD_LENGTH = 8
 
+/**
+ * 비밀번호 규칙. 서버 AuthDto.PASSWORD_REGEX 와 동일합니다.
+ *
+ * 앱에서 미리 걸러야 서버까지 갔다가 422 로 되돌아오는 일이 없습니다.
+ * 두 곳이 달라지면 사용자가 "왜 안 되지" 하게 되므로 값을 맞춥니다.
+ */
+private val PASSWORD_REGEX = Regex("^(?=.*[A-Za-z])(?=.*[0-9]).{8,}$")
+
+private const val PASSWORD_RULE_TEXT = "영문과 숫자를 포함해 8자 이상"
+
 enum class PhoneVerifyState { Idle, CodeSent, Verifying, Verified, Failed }
 
 data class SignUpForm(
@@ -97,7 +107,7 @@ data class SignUpForm(
     val nameDone get() = name.trim().length >= 2
     val displayNameDone get() = displayName.isNotBlank()
     val phoneDone get() = phone.filter(Char::isDigit).length >= 10
-    val passwordValid get() = password.length >= MIN_PASSWORD_LENGTH
+    val passwordValid get() = PASSWORD_REGEX.matches(password)
     val passwordMatched get() = passwordValid && password == passwordConfirm
 }
 
@@ -143,7 +153,7 @@ fun SignUpRoute(
                     verifyState = PhoneVerifyState.CodeSent
                 }
                 .onFailure {
-                    errorMessage = (it as? ApiFailure)?.error?.message
+                    errorMessage = (it as? ApiFailure)?.displayMessage
                         ?: "인증번호를 보내지 못했어요"
                     verifyState = PhoneVerifyState.Idle
                 }
@@ -168,7 +178,7 @@ fun SignUpRoute(
                         verifyState = PhoneVerifyState.Verified
                     }
                     .onFailure {
-                        errorMessage = (it as? ApiFailure)?.error?.message
+                        errorMessage = (it as? ApiFailure)?.displayMessage
                         verifyState = PhoneVerifyState.Failed
                     }
             }
@@ -392,12 +402,15 @@ fun SignUpScreen(
                         label = "비밀번호",
                         value = form.password,
                         onValueChange = { onFormChange(form.copy(password = it)) },
-                        placeholder = "8자 이상",
+                        placeholder = PASSWORD_RULE_TEXT,
                         isPassword = true,
                     )
-                    if (form.password.isNotEmpty() && !form.passwordValid) {
-                        FieldHelper("8자 이상 입력해 주세요", isError = true)
-                    }
+                    FieldHelper(
+                        if (form.password.isNotEmpty() && !form.passwordValid)
+                            "${PASSWORD_RULE_TEXT}으로 입력해 주세요"
+                        else PASSWORD_RULE_TEXT,
+                        isError = form.password.isNotEmpty() && !form.passwordValid,
+                    )
                 }
             }
 

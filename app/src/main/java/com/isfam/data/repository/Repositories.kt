@@ -15,11 +15,26 @@ import com.isfam.data.api.ApiError
  *   빠뜨리면 앱이 죽습니다. Result 로 강제하면 컴파일러가 잡아줍니다.
  */
 
-/** 서버 오류를 화면이 그대로 쓸 수 있는 형태로 감쌉니다 */
+/**
+ * 서버 오류를 화면이 그대로 쓸 수 있는 형태로 감쌉니다.
+ *
+ * fieldMessage 를 우선 쓰세요. 서버가 어느 필드가 왜 틀렸는지
+ * 알려주는데, 일반 문구("입력값을 확인해 주세요")만 보여주면
+ * 사용자가 무엇을 고쳐야 할지 알 수 없습니다.
+ */
 data class ApiFailure(
     val error: ApiError,
     val statusCode: Int? = null,
-) : Exception(error.message)
+    /** field → reason. 예) password → "영문과 숫자를 포함해 8자 이상이어야 해요" */
+    val fieldErrors: Map<String, String> = emptyMap(),
+) : Exception(error.message) {
+
+    /** 필드 오류가 있으면 그것을, 없으면 일반 문구를 돌려줍니다 */
+    val displayMessage: String
+        get() = fieldErrors.values.firstOrNull() ?: error.message
+
+    fun reasonFor(field: String): String? = fieldErrors[field]
+}
 
 // ══════════════════════════════════════════════════════════════
 //  인증

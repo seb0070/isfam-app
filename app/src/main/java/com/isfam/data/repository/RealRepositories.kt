@@ -42,12 +42,18 @@ internal suspend fun <T> apiCall(block: suspend () -> T): Result<T> =
         throw when (throwable) {
             is HttpException -> {
                 val body = throwable.response()?.errorBody()?.string()
-                val code = body?.let {
+                val parsed = body?.let {
                     runCatching {
-                        errorJson.decodeFromString<ApiErrorResponse>(it).errorCode
+                        errorJson.decodeFromString<ApiErrorResponse>(it)
                     }.getOrNull()
                 }
-                ApiFailure(ApiError.from(code), throwable.code())
+                ApiFailure(
+                    error = ApiError.from(parsed?.errorCode),
+                    statusCode = throwable.code(),
+                    fieldErrors = parsed?.fieldErrors
+                        ?.associate { it.field to it.reason }
+                        .orEmpty(),
+                )
             }
             // 네트워크 자체가 안 되는 경우
             is java.io.IOException -> ApiFailure(ApiError.ServerError)

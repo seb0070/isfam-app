@@ -150,7 +150,9 @@ fun PermissionRoute(
                         onSignUpComplete()
                     }
                     .onFailure {
-                        errorMessage = (it as? ApiFailure)?.error?.message
+                        // 서버가 어느 필드가 틀렸는지 알려주면 그 문구를 씁니다.
+                        // "입력값을 확인해 주세요"만 보여주면 뭘 고칠지 알 수 없습니다.
+                        errorMessage = (it as? ApiFailure)?.displayMessage
                             ?: "가입에 실패했어요. 잠시 후 다시 시도해 주세요"
                     }
                 submitting = false

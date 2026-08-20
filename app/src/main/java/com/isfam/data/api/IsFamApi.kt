@@ -828,6 +828,22 @@ data class SyncPermissionsRequest(
 data class ApiErrorResponse(
     @SerialName("error_code") val errorCode: String? = null,
     val message: String? = null,
+    val status: Int? = null,
+    val path: String? = null,
+    /**
+     * 어느 필드가 왜 틀렸는지.
+     *
+     * COMMON_002(422) 일 때 서버가 채워 줍니다.
+     * "입력값을 확인해 주세요"만 보여주면 사용자가 뭘 고쳐야 할지
+     * 알 수 없으므로 이 문구를 우선 표시합니다.
+     */
+    @SerialName("field_errors") val fieldErrors: List<FieldError> = emptyList(),
+)
+
+@Serializable
+data class FieldError(
+    val field: String,
+    val reason: String,
 )
 
 /**
