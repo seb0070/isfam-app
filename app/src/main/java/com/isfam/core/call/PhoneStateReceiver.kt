@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.telephony.TelephonyManager
+import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.workDataOf
@@ -91,7 +92,13 @@ class PhoneStateReceiver : BroadcastReceiver() {
             )
             .build()
 
-        WorkManager.getInstance(context).enqueue(request)
+        // 통화마다 고유 이름을 붙여 중복 실행을 막습니다.
+        // 같은 통화에 대해 리시버가 두 번 불려도 한 번만 돕니다.
+        WorkManager.getInstance(context).enqueueUniqueWork(
+            "call_analysis_$startedAt",
+            ExistingWorkPolicy.KEEP,
+            request,
+        )
     }
 
     companion object {
