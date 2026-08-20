@@ -21,7 +21,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -31,11 +33,13 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.launch
 import com.isfam.core.designsystem.Danger
 import com.isfam.core.designsystem.Ink
 import com.isfam.core.designsystem.InkFaint
 import com.isfam.core.designsystem.InkMuted
 import com.isfam.core.designsystem.IsFamTheme
+import com.isfam.core.rememberAppContainer
 import com.isfam.core.designsystem.IsFamToggle
 import com.isfam.core.designsystem.MainTab
 import com.isfam.core.designsystem.MainTabScaffold
@@ -104,14 +108,41 @@ fun SettingsRoute(
     onDeleteAllVoiceData: () -> Unit,
     onLogout: () -> Unit,
 ) {
-    // TODO: Repository + PermissionChecker 연결 시 교체
+    val container = rememberAppContainer()
+    val scope = rememberCoroutineScope()
+
     var state by remember { mutableStateOf(FakeSettingsData.state) }
+
+    // 서버 상태로 덮어씁니다.
+    // 실패해도 화면은 기본값으로 뜨므로 흐름을 막지 않습니다.
+    LaunchedEffect(Unit) {
+        container.authRepository.getMe().onSuccess { me ->
+            state = state.copy(
+                userName = me.displayName,
+                phoneNumber = me.phoneNumber,
+            )
+        }
+        container.voiceprintRepository.getStatus().onSuccess { voice ->
+            state = state.copy(voiceRegistered = voice.registered)
+        }
+        container.familyRepository.getFamily().onSuccess { family ->
+            state = state.copy(familyCount = family.members.size)
+        }
+        container.settingsRepository.getSettings().onSuccess { settings ->
+            state = state.copy(dangerPush = settings.notificationEnabled)
+        }
+    }
 
     SettingsScreen(
         state = state,
         onTabSelected = onTabSelected,
         onAutoAnalysisChange = { state = state.copy(autoAnalysis = it) },
-        onDangerPushChange = { state = state.copy(dangerPush = it) },
+        onDangerPushChange = { enabled ->
+            state = state.copy(dangerPush = enabled)
+            scope.launch {
+                container.settingsRepository.updateNotificationEnabled(enabled)
+            }
+        },
         onSensitivityClick = {
             state = state.copy(
                 alertSensitivity = when (state.alertSensitivity) {

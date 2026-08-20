@@ -61,6 +61,8 @@ import com.isfam.core.designsystem.ProcessingEnd
 import com.isfam.core.designsystem.Safe
 import com.isfam.core.designsystem.White
 import com.isfam.core.ml.VoiceprintEnrollmentService
+import com.isfam.data.repository.ApiFailure
+import com.isfam.data.repository.VoiceQuality
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -77,11 +79,16 @@ import java.io.File
  *   단계 카드 radius 22 · padding 18 · gap 13
  *     완료 22원 #5AA97A ✓ / 진행중 border 2.5 앰버(pulse) / 대기 border #E4D9C9
  */
+/**
+ * 실제로 일어나는 일과 라벨을 맞췄습니다.
+ * 진행바만 도는 가짜 단계를 두면 문제가 생겼을 때
+ * 어디서 멈췄는지 알 수 없습니다.
+ */
 enum class ProcessingStep(val label: String) {
     QualityCheck("음성 품질 검사"),
     NoiseCleanup("노이즈 정리"),
     Voiceprint("성문(Voiceprint) 생성"),
-    SecureStore("보안 저장"),
+    SecureStore("안전하게 저장"),
 }
 
 @Composable
@@ -94,7 +101,9 @@ fun VoiceProcessingRoute(
     onFailed: (String) -> Unit,
 ) {
     val context = LocalContext.current
-    val ml = remember { (context.applicationContext as IsFamApplication).container.ml }
+    val container = remember { (context.applicationContext as IsFamApplication).container }
+    val ml = container.ml
+    val voiceprintRepo = container.voiceprintRepository
 
     var doneCount by remember { mutableIntStateOf(0) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
@@ -135,7 +144,7 @@ fun VoiceProcessingRoute(
             delay(300)
 
             // ③ 성문 생성 — ONNX 추론. 실제로 시간이 걸리는 단계입니다
-            withContext(Dispatchers.Default) {
+            val result = withContext(Dispatchers.Default) {
                 ml.enrollmentService.enroll(
                     familyId = profileId,
                     audioFiles = recordedFiles,
@@ -143,8 +152,32 @@ fun VoiceProcessingRoute(
             }
             doneCount = 3
 
-            // ④ 보안 저장 — enroll() 이 Keystore 에 이미 저장했습니다
-            delay(200)
+            // ④ 저장 — Keystore(완료) + 서버.
+            //    오디오가 아니라 임베딩만 보냅니다.
+            //
+            // 본인 성문일 때만 올립니다. 가족 성문은 각자의 폰에서
+            // 등록하고 GET /family/embeddings 로 받아옵니다.
+            if (profileId == VoiceprintEnrollmentService.OWNER_PROFILE_ID) {
+                result.perSentence.forEach { (sentenceId, embedding) ->
+                    val q = result.quality[sentenceId]
+                    voiceprintRepo.registerVoiceprint(
+                        sentenceId = sentenceId,
+                        embedding = embedding,
+                        quality = VoiceQuality(
+                            isAnalyzable = true,
+                            durationSeconds = q?.durationSeconds,
+                            rmsEnergy = q?.rmsEnergy,
+                            peakAmplitude = q?.peakAmplitude,
+                        ),
+                    ).onFailure { error ->
+                        // 서버 등록이 실패해도 Keystore 에는 저장돼 있어
+                        // 이 폰에서의 판별은 동작합니다.
+                        // 다만 가족과 공유되지 않으므로 사용자에게 알립니다.
+                        throw error
+                    }
+                }
+            }
+
             doneCount = 4
             delay(400)
         }
@@ -155,7 +188,9 @@ fun VoiceProcessingRoute(
         //    취소는 오류가 아니므로 그대로 다시 던져야 합니다.
         outcome.exceptionOrNull()?.let { error ->
             if (error is kotlinx.coroutines.CancellationException) throw error
-            errorMessage = error.message ?: "성문 생성에 실패했습니다"
+            errorMessage = (error as? ApiFailure)?.displayMessage
+                ?: error.message
+                        ?: "성문 생성에 실패했습니다"
             currentOnFailed(errorMessage!!)
             return@LaunchedEffect
         }
