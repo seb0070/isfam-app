@@ -33,6 +33,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.isfam.core.designsystem.Amber600
+import com.isfam.core.rememberAppContainer
 import com.isfam.core.designsystem.IsFamTheme
 import com.isfam.core.designsystem.Mascot
 import com.isfam.core.designsystem.MascotImage
@@ -58,24 +59,73 @@ enum class BootStep(val label: String) {
     AuthCheck("로그인 상태 확인"),
 }
 
+/**
+ * 진입 지점 판단.
+ *
+ * 온보딩을 어디까지 마쳤는지에 따라 갈라집니다.
+ * 이 판단을 여기서 한 번에 하지 않으면 각 화면이 스스로 확인하게 되고,
+ * 화면이 떴다가 곧바로 튕기는 깜빡임이 생깁니다.
+ */
 @Composable
 fun SplashRoute(
-    onLoggedIn: () -> Unit,
-    onNeedLogin: () -> Unit,
+    onReady: (SplashDestination) -> Unit,
 ) {
+    val container = rememberAppContainer()
     var doneCount by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(Unit) {
-        delay(600); doneCount = 1   // TODO: 서버 연결 확인 (GET /health)
-        delay(600); doneCount = 2   // TODO: 보안 세션 준비
-        delay(600); doneCount = 3   // TODO: 로그인 상태 확인 (GET /auth/me)
+        // ① 서버 연결 확인
+        val serverAlive = container.api.runCatching { health() }.isSuccess
+        doneCount = 1
+        delay(200)
 
+        // ② 로그인 상태
+        val loggedIn = container.authRepository.hasSession()
+        doneCount = 2
+        delay(200)
+
+        if (!loggedIn) {
+            doneCount = 3
+            delay(300)
+            onReady(SplashDestination.Onboarding)
+            return@LaunchedEffect
+        }
+
+        // ③ 목소리 등록 · 가족 참여 여부
+        //
+        // 서버가 죽어 있으면 확인할 수 없습니다. 그때는 홈으로 보냅니다.
+        // 온보딩을 처음부터 다시 시키는 것보다 낫습니다.
+        val destination = if (!serverAlive) {
+            SplashDestination.Home
+        } else {
+            val voiceRegistered = container.voiceprintRepository
+                .getStatus().getOrNull()?.registered == true
+            val hasFamily = container.familyRepository.getFamily().isSuccess
+
+            when {
+                !voiceRegistered -> SplashDestination.VoiceEnrollment
+                !hasFamily -> SplashDestination.FamilySetup
+                else -> SplashDestination.Home
+            }
+        }
+
+        doneCount = 3
         delay(300)
-        val isLoggedIn = false      // TODO: TokenStore 결과로 교체
-        if (isLoggedIn) onLoggedIn() else onNeedLogin()
+        onReady(destination)
     }
 
     SplashScreen(doneCount = doneCount)
+}
+
+/** 스플래시 이후 어디로 갈지 */
+enum class SplashDestination {
+    /** 로그인 전 */
+    Onboarding,
+    /** 계정은 있으나 목소리 미등록 */
+    VoiceEnrollment,
+    /** 목소리는 등록했으나 가족 공간 없음 */
+    FamilySetup,
+    Home,
 }
 
 @Composable

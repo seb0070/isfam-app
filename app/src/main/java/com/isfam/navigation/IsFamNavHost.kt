@@ -16,9 +16,11 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -53,6 +55,7 @@ import com.isfam.feature.onboarding.OnboardingRoute
 import com.isfam.feature.result.AnalysisResultRoute
 import com.isfam.feature.settings.SettingsRoute
 import com.isfam.feature.onboarding.PermissionRoute
+import com.isfam.feature.splash.SplashDestination
 import com.isfam.feature.splash.SplashRoute
 import com.isfam.feature.voice.VoiceCompleteRoute
 import com.isfam.feature.voice.VoiceIntroRoute
@@ -99,13 +102,14 @@ fun IsFamNavHost(
         // ── 1. 진입 · 인증 ────────────────────────────────────
         composable<Route.Splash> {
             SplashRoute(
-                onLoggedIn = {
-                    navController.navigate(Route.Home) {
-                        popUpTo(Route.Splash) { inclusive = true }
+                onReady = { destination ->
+                    val target = when (destination) {
+                        SplashDestination.Onboarding -> Route.Onboarding
+                        SplashDestination.VoiceEnrollment -> Route.VoiceIntro
+                        SplashDestination.FamilySetup -> Route.FamilyEntry
+                        SplashDestination.Home -> Route.Home
                     }
-                },
-                onNeedLogin = {
-                    navController.navigate(Route.Onboarding) {
+                    navController.navigate(target) {
                         popUpTo(Route.Splash) { inclusive = true }
                     }
                 },
@@ -217,23 +221,32 @@ fun IsFamNavHost(
             )
         }
         composable<Route.VoiceComplete> {
+            val container = rememberAppContainer()
+            val scope = rememberCoroutineScope()
+
             VoiceCompleteRoute(
                 displayName = signUpSession.displayName.ifBlank { "회원" },
-                onNext = { navController.navigate(Route.FamilyEntry) },
+                onNext = {
+                    // 온보딩 경로가 둘입니다.
+                    //   직접 가입  → 가족 공간을 만들거나 참여해야 함
+                    //   초대로 진입 → 이미 참여 완료. 바로 홈으로
+                    //
+                    // 여기서 한 번만 판단하면 두 경로가 모두 맞아떨어집니다.
+                    scope.launch {
+                        val hasFamily = container.familyRepository
+                            .getFamily().isSuccess
+
+                        val target = if (hasFamily) Route.Home else Route.FamilyEntry
+                        navController.navigate(target) {
+                            popUpTo(Route.VoiceIntro) { inclusive = true }
+                        }
+                    }
+                },
             )
         }
         composable<Route.FamilyEntry> {
-            // 이미 소속된 공간이 있으면 홈으로 보냅니다.
-            // 이 검사가 없으면 만들기 화면에 들어가 FAMILY_004 를 만납니다.
-            val container = rememberAppContainer()
-            LaunchedEffect(Unit) {
-                container.familyRepository.getFamily().onSuccess {
-                    navController.navigate(Route.Home) {
-                        popUpTo(Route.FamilyEntry) { inclusive = true }
-                    }
-                }
-            }
-
+            // 가족 유무 판단은 VoiceComplete 에서 이미 끝났습니다.
+            // 여기서 또 확인하면 화면이 떴다가 홈으로 튕겨 깜빡입니다.
             FamilyEntryRoute(
                 onCreate = { navController.navigate(Route.FamilyCreate) },
                 onJoin = { navController.navigate(Route.InviteCodeInput) },
@@ -292,12 +305,16 @@ fun IsFamNavHost(
         }
         composable<Route.InviteAccept> { entry ->
             val args = entry.toRoute<Route.InviteAccept>()
+
             InviteAcceptRoute(
                 inviteCode = args.inviteCode,
                 myInitial = signUpSession.displayName.take(1).ifBlank { "나" },
                 enteredByLink = args.inviteCode.isBlank(),
                 onAccepted = {
-                    navController.navigate(Route.VoiceIntro) {
+                    // 목소리 등록은 이 화면에 오기 전에 이미 끝나 있습니다.
+                    //   회원정보 → 권한 → 목소리 등록 → 가족 공간
+                    // 순서가 고정이라 여기서 다시 확인할 필요가 없습니다.
+                    navController.navigate(Route.Home) {
                         popUpTo(Route.FamilyEntry) { inclusive = true }
                     }
                 },
