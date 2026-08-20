@@ -152,6 +152,22 @@ fun VoiceProcessingRoute(
             }
             doneCount = 3
 
+            // 임계값 조정을 위해 지표를 남깁니다.
+            // SNR 은 서버 스펙에 없어 전송하지 않습니다.
+            if (com.isfam.BuildConfig.DEBUG) {
+                result.quality.forEach { (id, q) ->
+                    android.util.Log.d(
+                        "IsFamVoice",
+                        "문장 %d · %.1f초 · RMS %.4f · 발화 %.0f%% · SNR %s".format(
+                            id, q.durationSeconds, q.rmsEnergy,
+                            q.speechRatio * 100,
+                            if (q.silentFrames >= 10) "%.1fdB".format(q.snrDb)
+                            else "측정 불가(배경 구간 ${q.silentFrames}프레임)",
+                        ),
+                    )
+                }
+            }
+
             // ④ 저장 — Keystore(완료) + 서버.
             //    오디오가 아니라 임베딩만 보냅니다.
             //
@@ -168,6 +184,8 @@ fun VoiceProcessingRoute(
                             durationSeconds = q?.durationSeconds,
                             rmsEnergy = q?.rmsEnergy,
                             peakAmplitude = q?.peakAmplitude,
+                            // 이 값을 빠뜨리면 서버 품질 판정이 절반만 돕니다
+                            speechRatio = q?.speechRatio,
                         ),
                     ).onFailure { error ->
                         // 서버 등록이 실패해도 Keystore 에는 저장돼 있어
