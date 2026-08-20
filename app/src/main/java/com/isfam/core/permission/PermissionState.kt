@@ -65,6 +65,16 @@ enum class RuntimePermission(
         minSdk = 33,
     ),
 
+    /**
+     * 등록된 가족이 이 폰에 어떤 이름으로 저장돼 있는지 조회합니다.
+     * 통화 녹음 파일명이 그 이름으로 나오기 때문에 필요합니다.
+     */
+    Contacts(
+        manifestKey = Manifest.permission.READ_CONTACTS,
+        title = "연락처",
+        reason = "가족이 저장된 이름을 확인해 그 통화만 분석합니다. 연락처를 밖으로 보내지 않습니다.",
+    ),
+
     /** 목소리 등록 시에만 사용 */
     Microphone(
         manifestKey = Manifest.permission.RECORD_AUDIO,
@@ -82,6 +92,15 @@ enum class RuntimePermission(
 
         fun required(): List<RuntimePermission> =
             applicable().filter { it != Microphone }   // 마이크는 등록 화면에서 별도 요청
+
+        /**
+         * 없어도 앱이 동작하는 권한.
+         *
+         * 연락처가 없으면 저장된 가족 이름을 알 수 없어
+         * 모르는 번호 통화만 분석하게 됩니다. 보호 범위가 좁아지지만
+         * 서비스 자체는 돌아갑니다.
+         */
+        fun optional(): List<RuntimePermission> = listOf(Contacts)
     }
 }
 

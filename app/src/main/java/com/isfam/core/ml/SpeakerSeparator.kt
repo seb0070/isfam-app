@@ -58,8 +58,8 @@ class SpeakerSeparator(
     ) {
         val usable: Boolean
             get() = farEndEmbedding != null &&
-                farEndSec >= MIN_FAR_END_SEC &&
-                coherence >= 0.6f
+                    farEndSec >= MIN_FAR_END_SEC &&
+                    coherence >= 0.6f
 
         fun summary(): String = buildString {
             append("주인 %.1f초 · 상대 %.1f초 · 애매 %.1f초 · 무음 %.1f초"

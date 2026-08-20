@@ -14,6 +14,16 @@
     <!-- 통화 종료 감지 + 수신/발신 구분 -->
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
 
+    <!--
+      등록된 가족이 이 폰에 어떤 이름으로 저장돼 있는지 조회합니다.
+      통화 녹음 파일명이 그 이름으로 나오기 때문에 필요합니다.
+      (예: 우리 시스템 "김서연" → 이 폰 연락처 "큰딸")
+
+      PhoneLookup 으로 특정 번호만 역조회하며,
+      조회 결과는 단말에만 두고 서버로 보내지 않습니다.
+    -->
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
+
     <!-- 목소리 등록 시에만 사용 -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
 

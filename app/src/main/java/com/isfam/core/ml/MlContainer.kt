@@ -34,6 +34,11 @@ class MlContainer(private val context: Context) {
         SpeakerSeparator(speakerVerifier)
     }
 
+    /** 통화 분석 — 화자 분리 → 1:N 대조 → 2축 판정 */
+    val callAnalyzer: CallAnalyzer by lazy {
+        CallAnalyzer(speakerSeparator, voiceprintStore)
+    }
+
     /** 앱 종료 시 ONNX 세션 해제 */
     fun close() {
         runCatching { speakerVerifier.close() }

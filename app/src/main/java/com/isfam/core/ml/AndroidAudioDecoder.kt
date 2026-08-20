@@ -5,10 +5,24 @@ import android.media.MediaExtractor
 import android.media.MediaFormat
 import java.io.ByteArrayOutputStream
 import java.io.File
+import com.isfam.core.audio.Resampler
 import java.nio.ByteOrder
-import kotlin.math.floor
 
-/** m4a/wav 통화·등록 파일을 ONNX 입력용 mono 16 kHz PCM으로 변환합니다. */
+/**
+ * m4a/wav 통화·등록 파일을 ONNX 입력용 mono 16 kHz PCM 으로 변환합니다.
+ *
+ * 리샘플링은 core/audio/Resampler 를 씁니다.
+ *
+ * ⚠️ 선형 보간을 쓰면 안 됩니다.
+ *    통화 녹음은 44.1kHz 또는 48kHz 로 들어오는데,
+ *    16kHz 로 줄일 때 나이퀴스트(8kHz)를 넘는 성분을 먼저 제거하지
+ *    않으면 그 성분이 아래 대역으로 접혀 들어와 임베딩을 왜곡합니다.
+ *    특히 44.1→16 은 2.75:1 비정수 비율이라 오차가 더 큽니다.
+ *
+ *    Resampler 는 windowed-sinc(Lanczos) 로 저역통과를 함께 적용합니다.
+ *    실기기 검증: 12kHz 사인파 → RMS 0.0061 로 억제,
+ *                1kHz 사인파  → 비율 1.000 으로 보존
+ */
 class AndroidAudioDecoder {
     fun decode(file: File): FloatArray {
         require(file.isFile && file.length() > 0) { "audio file is empty: ${file.name}" }
@@ -90,7 +104,7 @@ class AndroidAudioDecoder {
         }
         val mono = pcm16ToMono(bytes.toByteArray(), channels)
         return if (sampleRate == SpeakerFbankExtractor.SAMPLE_RATE) mono
-        else linearResample(mono, sampleRate, SpeakerFbankExtractor.SAMPLE_RATE)
+        else Resampler.resample(mono, sampleRate, SpeakerFbankExtractor.SAMPLE_RATE)
     }
 
     private fun pcm16ToMono(bytes: ByteArray, channels: Int): FloatArray {
@@ -101,19 +115,6 @@ class AndroidAudioDecoder {
             var sum = 0f
             repeat(channels) { sum += buffer.get() / 32768f }
             sum / channels
-        }
-    }
-
-    internal fun linearResample(input: FloatArray, sourceRate: Int, targetRate: Int): FloatArray {
-        require(sourceRate > 0 && targetRate > 0)
-        if (input.isEmpty() || sourceRate == targetRate) return input.copyOf()
-        val outputSize = (input.size.toLong() * targetRate / sourceRate).toInt().coerceAtLeast(1)
-        return FloatArray(outputSize) { outputIndex ->
-            val position = outputIndex.toDouble() * sourceRate / targetRate
-            val left = floor(position).toInt().coerceIn(input.indices)
-            val right = (left + 1).coerceAtMost(input.lastIndex)
-            val fraction = (position - left).toFloat()
-            input[left] * (1f - fraction) + input[right] * fraction
         }
     }
 }

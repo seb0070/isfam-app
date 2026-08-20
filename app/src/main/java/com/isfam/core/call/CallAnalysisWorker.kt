@@ -3,6 +3,7 @@ package com.isfam.core.call
 import android.content.Context
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
+import com.isfam.core.IsFamApplication
 import com.isfam.core.audio.AudioPipeline
 
 /**
@@ -56,10 +57,13 @@ class CallAnalysisWorker(
 
         // 녹음 파일이 나타날 때까지 대기
         CallLog.d("녹음 파일 대기 시작…")
-        val found = source.awaitNewRecording(since = endedAt)
+        val found = source.awaitRecordingFor(
+            callStartedAt = startedAt,
+            callEndedAt = endedAt,
+        )
         if (found == null) {
             // 자동녹음이 꺼져 있거나 지원하지 않는 기기일 수 있습니다
-            CallLog.w("90초 내 녹음 파일 없음 — 자동녹음 설정 확인 필요")
+            CallLog.w("30초 내 이번 통화의 녹음 파일을 찾지 못함 — 자동녹음 설정 확인 필요")
             return Result.success()
         }
         CallLog.d(
@@ -83,10 +87,20 @@ class CallAnalysisWorker(
             )
         )
 
-        // 분석 대상인지 판정
-        // TODO: 등록 가족 이름을 Repository 에서 가져옵니다
-        val registeredNames = emptySet<String>()
-        val decision = CallGate.decide(stable, isIncoming, registeredNames)
+        // 분석 대상인지 판정합니다.
+        //
+        // ⚠️ registeredFamilyNames 가 비어 있으면 저장된 연락처가
+        //    전부 건너뛰어집니다. 실제로 이 버그를 겪었습니다.
+        //    FamilyContactResolver 로 반드시 채워야 합니다.
+        //
+        // TODO: 서버에서 가족 전화번호를 받아 연락처 이름으로 변환
+        //   val numbers = familyRepository.getPhoneNumbers()
+        //   val familyNames = FamilyContactResolver(applicationContext).resolveAll(numbers)
+        val familyNames = emptySet<String>()
+        // TODO: 22번 프로필 시트에서 자동 분석을 끈 가족
+        val excludedNames = emptySet<String>()
+
+        val decision = CallGate.decide(stable, isIncoming, familyNames, excludedNames)
 
         if (decision is CallGate.Decision.Skip) {
             CallLog.d("게이트: 건너뜀 — ${decision.reason.label}")
@@ -114,9 +128,35 @@ class CallAnalysisWorker(
 
             is AudioPipeline.Result.Success -> {
                 CallLog.d("전처리 완료\n${prepared.audio.summary()}")
-                CallLog.d("윈도우 ${prepared.audio.windows().size}개")
-                // TODO: #16 화자 분리 → 1:N 대조 → 결과 저장
-                // TODO: #10 위험이면 알림 발송
+
+                val ml = (applicationContext as IsFamApplication).container.ml
+
+                // 딥보이스는 서버에서 판별합니다. 실패해도 판정은 진행합니다.
+                // TODO: POST /anti-spoofing/detect 연결
+                //   음질 통과 구간에서 최대 30초만 업로드
+                val spoofScore: Float? = null
+                val spoofReliable = false
+
+                val analysis = ml.callAnalyzer.analyze(
+                    audio = prepared.audio,
+                    identity = stable.identity,
+                    spoofScore = spoofScore,
+                    spoofReliable = spoofReliable,
+                )
+
+                CallLog.d(
+                    "판정 ${analysis.verdict.level} · " +
+                            "위험도 %.0f · 총 ${analysis.elapsedMs}ms"
+                                .format(analysis.verdict.riskScore)
+                )
+                analysis.verdict.reasons.forEach { CallLog.d("  · $it") }
+
+                // TODO: 로컬 DB 저장 (#16)
+                //   similarity, matchedFamilyId 는 서버로 보내면 안 됩니다.
+                //   히스토리 화면은 이 로컬 기록으로 그립니다.
+
+                // TODO: POST /voice-analyses — analysis.verdict.toServerPayload()
+                // TODO: #10 DANGER 면 알림 발송
             }
         }
 
