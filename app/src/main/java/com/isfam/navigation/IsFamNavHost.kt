@@ -265,7 +265,6 @@ fun IsFamNavHost(
 
             FamilyInviteRoute(
                 inviteCode = invite?.code ?: "······",
-                qrCodeUrl = invite?.qrCodeUrl,
                 expiresInText = if (invite == null) "코드를 만드는 중…"
                 else "유효시간 72시간",
                 onSkip = {
@@ -279,7 +278,6 @@ fun IsFamNavHost(
         composable<Route.FamilyInviteManage> {
             FamilyInviteRoute(
                 inviteCode = "AB12CD",
-                qrCodeUrl = null,
                 expiresInText = "유효시간 71시간 58분 남음",
                 isReentry = true,
                 onSkip = null,

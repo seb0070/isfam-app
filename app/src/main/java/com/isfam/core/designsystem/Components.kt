@@ -39,6 +39,9 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.foundation.Image
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -740,47 +743,90 @@ private fun CodeBox(
 }
 
 /**
- * QR 코드.
+ * 초대 QR 코드.
  *
- * ⚠️ 서버가 QR 이미지를 만들어 줍니다 (invite-code 응답의 qr_code_url).
- *    앱에서 ZXing 으로 생성할 필요가 없습니다.
+ * ⚠️ 서버의 qr_code_url 을 쓰지 않습니다.
+ *    그 주소에는 실제 이미지가 없고(서버가 QR 을 생성하지 않음),
+ *    필드도 정리 중이라 참조하면 안 됩니다.
  *
- * 이미지 로딩 라이브러리를 추가한 뒤 아래 주석을 해제하세요.
- *   libs.versions.toml:   coil = { group = "io.coil-kt", name = "coil-compose", version = "2.7.0" }
- *   app/build.gradle.kts: implementation(libs.coil)
+ * QR 에 담기는 건 invite_code 6글자뿐이라 앱에서 그리는 편이
+ * 빠르고 오프라인에서도 동작합니다.
  */
 @Composable
 fun QrCodeImage(
-    qrCodeUrl: String?,
+    /** 초대 코드 6자리. null 이면 발급 전입니다 */
+    inviteCode: String?,
     modifier: Modifier = Modifier,
     size: androidx.compose.ui.unit.Dp = 196.dp,
 ) {
-    // AsyncImage(
-    //     model = qrCodeUrl,
-    //     contentDescription = "가족 초대 QR 코드",
-    //     modifier = modifier.size(size).clip(RoundedCornerShape(12.dp)),
-    // )
+    val density = LocalDensity.current
+    val sizePx = with(density) { size.roundToPx() }
+
+    // 코드가 바뀔 때만 다시 그립니다. 매 컴포지션마다 생성하면 낭비입니다.
+    val bitmap = remember(inviteCode, sizePx) {
+        inviteCode?.takeIf { it.isNotBlank() }?.let { generateQrBitmap(it, sizePx) }
+    }
 
     Box(
         modifier = modifier
             .size(size)
             .clip(RoundedCornerShape(12.dp))
-            .background(ScreenBg),
+            .background(White),
         contentAlignment = Alignment.Center,
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("QR", style = MaterialTheme.typography.headlineMedium, color = InkPlaceholder)
-            if (qrCodeUrl != null) {
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    qrCodeUrl.substringAfterLast('/'),
-                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp),
-                    color = InkPlaceholder,
-                )
-            }
+        if (bitmap != null) {
+            Image(
+                bitmap = bitmap.asImageBitmap(),
+                contentDescription = "가족 초대 QR 코드",
+                modifier = Modifier.size(size),
+            )
+        } else {
+            Text(
+                "코드를 만드는 중…",
+                style = MaterialTheme.typography.bodySmall,
+                color = InkPlaceholder,
+            )
         }
     }
 }
+
+/**
+ * 문자열을 QR 비트맵으로.
+ *
+ * 오류 정정 수준을 M(약 15% 복원)으로 둡니다.
+ * 화면에 띄우는 QR 이라 훼손될 일이 없어 L 로도 충분하지만,
+ * 카메라 각도나 화면 반사를 감안해 한 단계 올렸습니다.
+ */
+private fun generateQrBitmap(content: String, sizePx: Int): android.graphics.Bitmap? =
+    runCatching {
+        val hints = mapOf(
+            com.google.zxing.EncodeHintType.ERROR_CORRECTION to
+                    com.google.zxing.qrcode.decoder.ErrorCorrectionLevel.M,
+            com.google.zxing.EncodeHintType.MARGIN to 1,
+            com.google.zxing.EncodeHintType.CHARACTER_SET to "UTF-8",
+        )
+
+        val matrix = com.google.zxing.MultiFormatWriter().encode(
+            content,
+            com.google.zxing.BarcodeFormat.QR_CODE,
+            sizePx,
+            sizePx,
+            hints,
+        )
+
+        val bitmap = android.graphics.Bitmap.createBitmap(
+            sizePx, sizePx, android.graphics.Bitmap.Config.ARGB_8888,
+        )
+        val dark = android.graphics.Color.BLACK
+        val light = android.graphics.Color.WHITE
+
+        for (x in 0 until sizePx) {
+            for (y in 0 until sizePx) {
+                bitmap.setPixel(x, y, if (matrix[x, y]) dark else light)
+            }
+        }
+        bitmap
+    }.getOrNull()
 
 // ══════════════════════════════════════════════════════════════
 //  토글 · 토스트

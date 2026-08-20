@@ -158,8 +158,18 @@ data class FamilyMember(
 data class InviteCode(
     /** 6자리 영숫자 — "AB12CD". 없으면 null */
     val code: String?,
+    /**
+     * ⚠️ 딥링크는 도메인 설정이 끝나지 않아 아직 동작하지 않습니다.
+     *    탭해도 앱이 열리지 않으므로 공유 기능에 쓰면 안 됩니다.
+     *    (assetlinks.json 등록 후 사용 가능)
+     */
     val link: String?,
-    /** 서버가 QR 이미지를 만들어 줍니다. 앱에서 생성하지 않습니다. */
+    /**
+     * ⚠️ 사용하지 마세요.
+     *    서버가 QR 이미지를 생성하지 않아 이 주소에는 아무것도 없습니다.
+     *    QR 은 code 값을 앱에서 직접 인코딩해 그립니다(QrCodeImage).
+     *    필드는 서버 정리 예정이라 곧 사라지거나 null 이 됩니다.
+     */
     val qrCodeUrl: String?,
     val expiresAt: String?,
 ) {

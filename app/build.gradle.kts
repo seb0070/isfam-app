@@ -93,4 +93,7 @@ dependencies {
     // implementation(libs.hilt.android)
     // ksp(libs.hilt.compiler)
     // implementation(libs.hilt.navigation.compose)
+
+    // 초대 QR 생성.
+    implementation(libs.zxing.core)
 }
