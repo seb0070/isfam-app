@@ -144,7 +144,7 @@ fun LoginScreen(
                 text = if (submitting) "로그인 중…" else "로그인",
                 onClick = onLogin,
                 enabled = !submitting &&
-                        phone.filter(Char::isDigit).length >= 10 &&
+                        Regex("^01[0-9]{8,9}$").matches(phone.filter(Char::isDigit)) &&
                         password.isNotBlank(),
             )
             errorMessage?.let {

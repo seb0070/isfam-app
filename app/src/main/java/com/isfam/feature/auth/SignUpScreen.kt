@@ -89,6 +89,14 @@ private val PASSWORD_REGEX = Regex("^(?=.*[A-Za-z])(?=.*[0-9]).{8,}$")
 
 private const val PASSWORD_RULE_TEXT = "영문과 숫자를 포함해 8자 이상"
 
+/**
+ * 휴대폰 번호 규칙. 서버 AuthDto 의 정규식과 동일합니다.
+ *
+ * 010 으로 시작하는 10~11자리. 앱에서 먼저 막지 않으면
+ * 버튼을 누른 뒤에야 422 로 거절당해 경험이 나빠집니다.
+ */
+private val PHONE_REGEX = Regex("^01[0-9]{8,9}$")
+
 enum class PhoneVerifyState { Idle, CodeSent, Verifying, Verified, Failed }
 
 data class SignUpForm(
@@ -106,7 +114,7 @@ data class SignUpForm(
     val requiredAgreed get() = terms && voiceData
     val nameDone get() = name.trim().length >= 2
     val displayNameDone get() = displayName.isNotBlank()
-    val phoneDone get() = phone.filter(Char::isDigit).length >= 10
+    val phoneDone get() = PHONE_REGEX.matches(phone.filter(Char::isDigit))
     val passwordValid get() = PASSWORD_REGEX.matches(password)
     val passwordMatched get() = passwordValid && password == passwordConfirm
 }
@@ -316,6 +324,16 @@ fun SignUpScreen(
                             keyboardType = KeyboardType.Phone,
                             enabled = verifyState == PhoneVerifyState.Idle,
                         )
+
+                        // 형식이 틀렸거나 서버가 거절한 경우를 여기서 알려줍니다.
+                        // 이 자리가 없으면 사용자는 왜 안 되는지 알 수 없습니다.
+                        if (form.phone.isNotEmpty() && !form.phoneDone) {
+                            FieldHelper("010으로 시작하는 번호를 입력해 주세요", isError = true)
+                        } else if (errorMessage != null &&
+                            verifyState == PhoneVerifyState.Idle
+                        ) {
+                            FieldHelper(errorMessage, isError = true)
+                        }
 
                         if (verifyState == PhoneVerifyState.Idle) {
                             Spacer(Modifier.height(10.dp))
