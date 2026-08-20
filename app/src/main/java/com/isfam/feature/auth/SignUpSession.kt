@@ -82,6 +82,28 @@ class SignUpSession {
         callRecordingEnabled = callRecording
     }
 
+    /**
+     * 서버 요청 형태로 변환합니다.
+     *
+     * 인증번호가 아니라 phoneVerificationToken 을 보냅니다.
+     * 토큰은 5분간만 유효하므로, 인증 후 가입까지 오래 걸리면
+     * AUTH_006 이 납니다. 그때는 인증부터 다시 해야 합니다.
+     */
+    fun toSignUpParams() = com.isfam.data.repository.SignUpParams(
+        phoneNumber = phoneNumber.filter(Char::isDigit),
+        phoneVerificationToken = phoneVerificationToken,
+        password = password,
+        userName = userName,
+        displayName = displayName,
+        termsAgreed = termsAgreed,
+        voicePrintAgreed = voicePrintAgreed,
+        marketingAgreed = marketingAgreed,
+        notificationPermission = notificationPermission,
+        microphonePermission = microphonePermission,
+        filePermission = filePermission,
+        callRecordingEnabled = callRecordingEnabled,
+    )
+
     fun reset() {
         userName = ""; displayName = ""; phoneNumber = ""
         password = ""; verificationId = ""; phoneVerificationToken = ""

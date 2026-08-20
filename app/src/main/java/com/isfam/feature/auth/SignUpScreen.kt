@@ -38,6 +38,7 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.isfam.core.rememberAppContainer
 import com.isfam.core.designsystem.CheckboxRow
 import com.isfam.core.designsystem.CompletedRow
 import com.isfam.core.designsystem.DividerLight
@@ -53,6 +54,7 @@ import com.isfam.core.designsystem.OtpTimer
 import com.isfam.core.designsystem.RevealSection
 import com.isfam.core.designsystem.StepProgressBar
 import com.isfam.core.designsystem.White
+import com.isfam.data.repository.ApiFailure
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -101,13 +103,25 @@ data class SignUpForm(
 
 @Composable
 fun SignUpRoute(
-    /** 수집한 입력값을 세션에 담아 다음(권한) 화면으로 넘깁니다 */
-    onNext: (SignUpForm) -> Unit,
+    /** 인증에 성공한 값을 세션에 담아 다음(권한) 화면으로 넘깁니다 */
+    onNext: (SignUpForm, phoneVerificationToken: String) -> Unit,
     onBack: () -> Unit,
 ) {
+    val container = rememberAppContainer()
+    val auth = container.authRepository
+
     var form by remember { mutableStateOf(SignUpForm()) }
     var verifyState by remember { mutableStateOf(PhoneVerifyState.Idle) }
     var remainSec by remember { mutableIntStateOf(OTP_TIMEOUT_SEC) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+
+    // phone/send 응답. verify 요청에 필요합니다.
+    var verificationId by remember { mutableStateOf("") }
+
+    // phone/verify 응답. 가입 요청에 인증번호 대신 이 토큰을 보냅니다.
+    // 5분간 유효하고 한 번 쓰면 폐기됩니다.
+    var phoneToken by remember { mutableStateOf("") }
+
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(verifyState) {
@@ -119,34 +133,57 @@ fun SignUpRoute(
         }
     }
 
+    /** 인증번호 발송. 재발송도 같은 경로입니다. */
+    fun sendCode() {
+        scope.launch {
+            errorMessage = null
+            auth.sendVerificationCode(form.phone.filter(Char::isDigit))
+                .onSuccess {
+                    verificationId = it.verificationId
+                    verifyState = PhoneVerifyState.CodeSent
+                }
+                .onFailure {
+                    errorMessage = (it as? ApiFailure)?.error?.message
+                        ?: "인증번호를 보내지 못했어요"
+                    verifyState = PhoneVerifyState.Idle
+                }
+        }
+    }
+
     SignUpScreen(
         form = form,
         verifyState = verifyState,
         remainSec = remainSec,
+        errorMessage = errorMessage,
         onFormChange = { form = it },
-        onSendCode = {
-            // TODO: POST /auth/phone/send → verification_id 저장
-            verifyState = PhoneVerifyState.CodeSent
-        },
+        onSendCode = ::sendCode,
         onVerifyCode = {
             scope.launch {
                 verifyState = PhoneVerifyState.Verifying
-                delay(400)
-                // TODO: POST /auth/phone/verify → phone_verification_token 저장
-                //       가입 요청에는 인증번호가 아니라 이 토큰을 보냅니다.
-                verifyState =
-                    if (form.code == "123456") PhoneVerifyState.Verified
-                    else PhoneVerifyState.Failed
+                errorMessage = null
+
+                auth.verifyPhoneCode(verificationId, form.code)
+                    .onSuccess {
+                        phoneToken = it
+                        verifyState = PhoneVerifyState.Verified
+                    }
+                    .onFailure {
+                        errorMessage = (it as? ApiFailure)?.error?.message
+                        verifyState = PhoneVerifyState.Failed
+                    }
             }
         },
-        onResend = { verifyState = PhoneVerifyState.CodeSent },
+        onResend = ::sendCode,
         onEditPhone = {
             verifyState = PhoneVerifyState.Idle
+            verificationId = ""
+            phoneToken = ""
+            errorMessage = null
             form = form.copy(code = "")
         },
         // 실제 가입 API 호출은 08 권한 화면에서 이뤄집니다.
         // signup 요청 본문에 권한 상태가 포함되기 때문입니다.
-        onSubmit = { onNext(form) },
+        onSubmit = { onNext(form, phoneToken) },
         onBack = onBack,
     )
 }
@@ -156,6 +193,8 @@ fun SignUpScreen(
     form: SignUpForm,
     verifyState: PhoneVerifyState,
     remainSec: Int,
+    /** 서버 오류 문구. 인증 실패 사유를 그대로 보여줍니다 */
+    errorMessage: String? = null,
     onFormChange: (SignUpForm) -> Unit,
     onSendCode: () -> Unit,
     onVerifyCode: () -> Unit,
@@ -326,7 +365,10 @@ fun SignUpScreen(
                     }
 
                     if (verifyState == PhoneVerifyState.Failed) {
-                        FieldHelper("인증번호가 일치하지 않아요. 다시 확인해 주세요.", isError = true)
+                        FieldHelper(
+                            errorMessage ?: "인증번호가 일치하지 않아요. 다시 확인해 주세요.",
+                            isError = true,
+                        )
                     } else {
                         FieldHelper("문자가 오지 않으면 스팸함도 확인해 보세요. (데모: 123456)")
                     }

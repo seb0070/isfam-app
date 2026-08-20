@@ -133,8 +133,9 @@ fun IsFamNavHost(
         }
         composable<Route.SignUp> {
             SignUpRoute(
-                onNext = { form ->
+                onNext = { form, phoneToken ->
                     signUpSession.applyForm(form)
+                    signUpSession.phoneVerificationToken = phoneToken
                     navController.navigate(Route.Permission)
                 },
                 onBack = { navController.popBackStack() },

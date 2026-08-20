@@ -24,18 +24,24 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.launch
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.isfam.core.designsystem.Divider
 import com.isfam.core.designsystem.InkBody
 import com.isfam.core.designsystem.InkMuted
+import com.isfam.core.designsystem.Danger
 import com.isfam.core.designsystem.IsFamButton
+import com.isfam.data.repository.ApiFailure
 import com.isfam.core.designsystem.IsFamScaffold
 import com.isfam.core.designsystem.IsFamTheme
 import com.isfam.core.designsystem.IsFamTopBar
@@ -44,6 +50,7 @@ import com.isfam.core.designsystem.ScreenHeadline
 import com.isfam.core.permission.PermissionChecker
 import com.isfam.core.permission.PermissionStatus
 import com.isfam.core.permission.PermissionUiState
+import com.isfam.core.rememberAppContainer
 import com.isfam.core.permission.RuntimePermission
 import com.isfam.core.permission.SettingsIntents
 import com.isfam.feature.auth.SignUpSession
@@ -71,6 +78,14 @@ fun PermissionRoute(
     val checker = remember { PermissionChecker(context) }
 
     var state by remember { mutableStateOf(checker.snapshot(activity)) }
+
+    val container = rememberAppContainer()
+    val auth = container.authRepository
+    val device = container.deviceRepository
+    val scope = rememberCoroutineScope()
+
+    var submitting by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
 
     val launcher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -104,6 +119,8 @@ fun PermissionRoute(
         onOpenSettings = {
             SettingsIntents.safeStart(context, SettingsIntents.appDetails(context))
         },
+        submitting = submitting,
+        errorMessage = errorMessage,
         onNext = {
             // 권한 상태를 세션에 반영한 뒤 가입 API 를 호출합니다.
             session.applyPermissions(
@@ -117,8 +134,27 @@ fun PermissionRoute(
                 //    사용자가 "설정했어요"를 누르면 true 가 됩니다.
                 callRecording = session.callRecordingEnabled,
             )
-            // TODO: POST /api/v1/auth/signup — session 을 SignupRequest 로 변환
-            onSignUpComplete()
+
+            scope.launch {
+                submitting = true
+                errorMessage = null
+
+                auth.signUp(session.toSignUpParams())
+                    .onSuccess {
+                        // 가입 직후 단말을 등록해 둡니다.
+                        // 실패해도 가입 자체는 성공이므로 흐름을 막지 않습니다.
+                        // TODO: FCM 토큰으로 교체
+                        device.registerDevice(pushToken = "")
+
+                        session.reset()
+                        onSignUpComplete()
+                    }
+                    .onFailure {
+                        errorMessage = (it as? ApiFailure)?.error?.message
+                            ?: "가입에 실패했어요. 잠시 후 다시 시도해 주세요"
+                    }
+                submitting = false
+            }
         },
     )
 }
@@ -126,6 +162,9 @@ fun PermissionRoute(
 @Composable
 fun PermissionScreen(
     state: PermissionUiState,
+    /** 가입 요청 중이면 버튼을 잠급니다 */
+    submitting: Boolean = false,
+    errorMessage: String? = null,
     onBack: () -> Unit,
     onRequestClick: () -> Unit,
     onOpenSettings: () -> Unit,
@@ -137,8 +176,23 @@ fun PermissionScreen(
         topBar = { IsFamTopBar(title = "권한 허용", step = "3 / 3 단계", onBack = onBack) },
         bottomBar = {
             when {
-                state.canProceed ->
-                    IsFamButton(text = "허용하고 가입 완료", onClick = onNext)
+                state.canProceed -> {
+                    IsFamButton(
+                        text = if (submitting) "가입하는 중…" else "허용하고 가입 완료",
+                        onClick = onNext,
+                        enabled = !submitting,
+                    )
+                    errorMessage?.let {
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            it,
+                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.5.sp),
+                            color = Danger,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                }
 
                 state.hasPermanentDenial -> {
                     Text(

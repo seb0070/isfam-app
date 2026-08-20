@@ -19,6 +19,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -30,12 +31,15 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
 import androidx.compose.ui.unit.sp
 import com.isfam.core.designsystem.Ink
 import com.isfam.core.designsystem.InkBody
 import com.isfam.core.designsystem.InkMuted
 import com.isfam.core.designsystem.InkMuted2
+import com.isfam.core.rememberAppContainer
 import com.isfam.core.designsystem.IsFamButton
+import com.isfam.data.repository.ApiFailure
 import com.isfam.core.designsystem.IsFamCheckbox
 import com.isfam.core.designsystem.IsFamScaffold
 import com.isfam.core.designsystem.IsFamTextField
@@ -59,21 +63,48 @@ fun LoginRoute(
     onSignUp: () -> Unit,
     onBack: () -> Unit,
 ) {
+    val auth = rememberAppContainer().authRepository
+    val scope = rememberCoroutineScope()
+
     var phone by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var autoLogin by remember { mutableStateOf(true) }
+    var submitting by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
 
     LoginScreen(
         phone = phone,
         password = password,
         autoLogin = autoLogin,
-        onPhoneChange = { phone = it },
-        onPasswordChange = { password = it },
+        submitting = submitting,
+        errorMessage = errorMessage,
+        onPhoneChange = {
+            phone = it
+            errorMessage = null
+        },
+        onPasswordChange = {
+            password = it
+            errorMessage = null
+        },
         onAutoLoginChange = { autoLogin = it },
-        // TODO: POST /api/v1/auth/login 연결
-        onLogin = onLoginSuccess,
+        onLogin = {
+            scope.launch {
+                submitting = true
+                errorMessage = null
+
+                auth.login(phone.filter(Char::isDigit), password)
+                    .onSuccess { onLoginSuccess() }
+                    .onFailure {
+                        // 가입되지 않은 번호인지 비밀번호가 틀렸는지
+                        // 서버가 구분해 주므로 그대로 보여줍니다.
+                        errorMessage = (it as? ApiFailure)?.error?.message
+                            ?: "로그인하지 못했어요. 잠시 후 다시 시도해 주세요"
+                    }
+                submitting = false
+            }
+        },
         onSignUp = onSignUp,
-        onFindPassword = { /* TODO */ },
+        onFindPassword = { /* TODO: 비밀번호 재설정 */ },
         onBack = onBack,
     )
 }
@@ -83,6 +114,8 @@ fun LoginScreen(
     phone: String,
     password: String,
     autoLogin: Boolean,
+    submitting: Boolean = false,
+    errorMessage: String? = null,
     onPhoneChange: (String) -> Unit,
     onPasswordChange: (String) -> Unit,
     onAutoLoginChange: (Boolean) -> Unit,
@@ -107,7 +140,23 @@ fun LoginScreen(
             )
         },
         bottomBar = {
-            IsFamButton(text = "로그인", onClick = onLogin)
+            IsFamButton(
+                text = if (submitting) "로그인 중…" else "로그인",
+                onClick = onLogin,
+                enabled = !submitting &&
+                        phone.filter(Char::isDigit).length >= 10 &&
+                        password.isNotBlank(),
+            )
+            errorMessage?.let {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    it,
+                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.5.sp),
+                    color = com.isfam.core.designsystem.Danger,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
             Spacer(Modifier.height(4.dp))
             Text(
                 text = buildAnnotatedString {
