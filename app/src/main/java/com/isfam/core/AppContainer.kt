@@ -1,9 +1,26 @@
 package com.isfam.core
 
 import android.content.Context
-import com.isfam.core.ml.HybridVoiceVerifier
 import com.isfam.core.ml.MlContainer
 import com.isfam.data.api.IsFamApi
+import com.isfam.data.repository.AuthRepository
+import com.isfam.data.repository.DeviceRepository
+import com.isfam.data.repository.FakeAuthRepository
+import com.isfam.data.repository.FakeDeviceRepository
+import com.isfam.data.repository.FakeFamilyRepository
+import com.isfam.data.repository.FakeNotificationRepository
+import com.isfam.data.repository.FakeSettingsRepository
+import com.isfam.data.repository.FakeVoiceprintRepository
+import com.isfam.data.repository.FamilyRepository
+import com.isfam.data.repository.NotificationRepository
+import com.isfam.data.repository.RealAuthRepository
+import com.isfam.data.repository.RealDeviceRepository
+import com.isfam.data.repository.RealFamilyRepository
+import com.isfam.data.repository.RealNotificationRepository
+import com.isfam.data.repository.RealSettingsRepository
+import com.isfam.data.repository.RealVoiceprintRepository
+import com.isfam.data.repository.SettingsRepository
+import com.isfam.data.repository.VoiceprintRepository
 import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -28,7 +45,7 @@ import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFact
 class AppContainer(private val context: Context) {
 
     /** 서버 준비 전에는 true. 준비되면 false 로만 바꾸면 됩니다. */
-    var useFakeData: Boolean = true
+    var useFakeData: Boolean = false  // 수동
 
     private val json = Json {
         ignoreUnknownKeys = true      // 서버가 필드를 추가해도 앱이 죽지 않게
@@ -66,23 +83,36 @@ class AppContainer(private val context: Context) {
      */
     val ml: MlContainer by lazy { MlContainer(context) }
 
-    val hybridVoiceVerifier: HybridVoiceVerifier by lazy {
-        HybridVoiceVerifier(
-            decoder = ml.audioDecoder,
-            speakerVerifier = ml.speakerVerifier,
-            voiceprintStore = ml.voiceprintStore,
-            api = api,
-        )
-    }
-
     // ── Repository ────────────────────────────────────────────
     //
     // useFakeData 하나로 전체가 전환됩니다.
-    // 서버가 준비되면 이 값만 false 로 바꾸세요.
+    // 화면은 인터페이스만 알고 구현체는 모르므로, 이 값을 바꿔도
+    // 화면 코드는 한 줄도 수정할 필요가 없습니다.
 
-    // val historyRepository: HistoryRepository by lazy {
-    //     if (useFakeData) FakeHistoryRepository() else RealHistoryRepository(api)
-    // }
+    val authRepository: AuthRepository by lazy {
+        if (useFakeData) FakeAuthRepository()
+        else RealAuthRepository(api, tokenStore)
+    }
+
+    val familyRepository: FamilyRepository by lazy {
+        if (useFakeData) FakeFamilyRepository() else RealFamilyRepository(api)
+    }
+
+    val voiceprintRepository: VoiceprintRepository by lazy {
+        if (useFakeData) FakeVoiceprintRepository() else RealVoiceprintRepository(api)
+    }
+
+    val deviceRepository: DeviceRepository by lazy {
+        if (useFakeData) FakeDeviceRepository() else RealDeviceRepository(api)
+    }
+
+    val settingsRepository: SettingsRepository by lazy {
+        if (useFakeData) FakeSettingsRepository() else RealSettingsRepository(api)
+    }
+
+    val notificationRepository: NotificationRepository by lazy {
+        if (useFakeData) FakeNotificationRepository() else RealNotificationRepository(api)
+    }
 }
 
 /**
@@ -147,6 +177,14 @@ class TokenStore(context: Context) {
     var refreshToken: String?
         get() = prefs.getString("refresh_token", null)
         set(v) = prefs.edit().putString("refresh_token", v).apply()
+
+    /** 로그인·가입 성공 시 두 토큰을 한 번에 저장합니다 */
+    fun save(access: String, refresh: String) {
+        prefs.edit()
+            .putString("access_token", access)
+            .putString("refresh_token", refresh)
+            .apply()
+    }
 
     fun clear() = prefs.edit().clear().apply()
 }

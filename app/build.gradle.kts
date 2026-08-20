@@ -23,8 +23,7 @@ android {
         versionName = "0.1.0"
 
         // 서버 주소를 코드에 박지 마세요. 배포 환경마다 달라집니다.
-        buildConfigField("String", "BASE_URL", "\"https://api.isfam.example/\"")
-    }
+        buildConfigField("String", "BASE_URL", "\"http://192.168.0.6:8080/\"")    }
 
     buildFeatures {
         compose = true

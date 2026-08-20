@@ -16,9 +16,10 @@ import retrofit2.http.Query
 
 /**
  * ══════════════════════════════════════════════════════════════
- *  IsFam 서버 API — 2026-08-15 명세 기준
+ *  IsFam 서버 API — 백엔드 구현(isfam-be, Kotlin/Spring) 기준
  *
- *  base URL 뒤에 /api/v1 이 붙습니다. (/health 제외)
+ *  경로에 접두어가 없습니다. Spring 서버에 context-path 설정이 없어
+ *  BASE_URL 뒤에 바로 붙습니다.
  *  대부분의 엔드포인트가 인증(Bearer)을 요구하며,
  *  일부는 X-Device-Id 헤더도 필수입니다. 둘 다 인터셉터가 자동 주입합니다.
  * ══════════════════════════════════════════════════════════════
@@ -37,52 +38,52 @@ interface IsFamApi {
     //
     // 데모 환경에서는 실제 SMS 를 보내지 않고 코드가 123456 으로 고정입니다.
 
-    @POST("api/v1/auth/phone/send")
+    @POST("auth/phone/send")
     suspend fun sendVerificationCode(@Body body: PhoneSendRequest): PhoneSendResponse
 
-    @POST("api/v1/auth/phone/verify")
+    @POST("auth/phone/verify")
     suspend fun verifyPhoneCode(@Body body: PhoneVerifyRequest): PhoneVerifyResponse
 
-    @POST("api/v1/auth/signup")
+    @POST("auth/signup")
     suspend fun signup(@Body body: SignupRequest): SignupResponse
 
-    @POST("api/v1/auth/login")
+    @POST("auth/login")
     suspend fun login(@Body body: LoginRequest): LoginResponse
 
-    @POST("api/v1/auth/logout")
+    @POST("auth/logout")
     suspend fun logout()
 
-    @POST("api/v1/auth/refresh")
+    @POST("auth/refresh")
     suspend fun refresh(@Body body: RefreshRequest): TokenResponse
 
-    @GET("api/v1/auth/me")
+    @GET("auth/me")
     suspend fun me(): MeResponse
 
     /** 닉네임 수정 */
-    @PUT("api/v1/auth/me")
+    @PUT("auth/me")
     suspend fun updateDisplayName(@Body body: UpdateDisplayNameRequest): UpdateDisplayNameResponse
 
     /** 회원 탈퇴 — PUT 입니다 (DELETE 아님) */
-    @PUT("api/v1/auth/me")
+    @PUT("auth/me")
     suspend fun withdraw(@Body body: WithdrawRequest)
 
     // ══ 가족 공간 ═════════════════════════════════════════════
 
-    @POST("api/v1/family")
+    @POST("family")
     suspend fun createFamily(@Body body: CreateFamilyRequest): FamilyResponse
 
-    @GET("api/v1/family")
+    @GET("family")
     suspend fun getFamily(): FamilyResponse
 
-    @PUT("api/v1/family")
+    @PUT("family")
     suspend fun renameFamily(@Body body: CreateFamilyRequest): RenameFamilyResponse
 
     /** 공간 삭제. owner 만 가능하고 다른 멤버가 남아 있으면 409 */
-    @DELETE("api/v1/family")
+    @DELETE("family")
     suspend fun deleteFamily()
 
     /** 나가기(본인) 또는 내보내기(owner) */
-    @DELETE("api/v1/family/members/{userId}")
+    @DELETE("family/members/{userId}")
     suspend fun removeMember(@Path("userId") userId: Int)
 
     // ══ 목소리 등록 ═══════════════════════════════════════════
@@ -90,41 +91,55 @@ interface IsFamApi {
     // 문장 3개를 각각 업로드합니다. 서버는 임베딩만 저장하고
     // 원본 파일은 즉시 삭제합니다.
 
-    @Multipart
-    @POST("api/v1/me/voiceprint")
+    /**
+     * 목소리 등록 · 재등록.
+     *
+     * ⚠️ 오디오를 보내지 않습니다. 앱이 ONNX 로 추출한 임베딩만 보냅니다.
+     *    서버가 consumes = application/json 으로 막아두었고,
+     *    multipart 로 보내면 415(COMMON_007)입니다.
+     *
+     *    등록용 음성이 서버에 도달하는 순간 딥보이스 판정과 같은
+     *    법적 의무(암호화 전송·접속기록·즉시 파기·처리방침)가 붙기 때문입니다.
+     *
+     * 여러 번 호출하면 샘플이 누적되고, 같은 sentence_id 면 교체됩니다.
+     */
+    @POST("me/voiceprint")
     suspend fun registerVoiceprint(
-        @Part("sentence_id") sentenceId: RequestBody,
-        @Part audioFile: MultipartBody.Part,
-    ): VoiceprintResponse
+        @Body body: VoiceprintRegisterRequest,
+    ): VoiceprintRegisterResponse
+
+    /** 미등록이면 404 가 아니라 voiceprint_registered=false 인 200 입니다 */
+    @GET("me/voiceprint")
+    suspend fun getVoiceprintStatus(): VoiceprintStatusResponse
 
     /** 부모 폰에서 가족 구성원 임베딩 다운로드 */
-    @GET("api/v1/family/embeddings")
+    @GET("family/embeddings")
     suspend fun getFamilyEmbeddings(
         @Query("since") since: String? = null,
     ): FamilyEmbeddingsResponse
 
-    @PUT("api/v1/devices/me/sync-status")
+    @PUT("devices/me/sync-status")
     suspend fun updateSyncStatus(@Body body: SyncStatusRequest): SyncStatusResponse
 
     // ══ 초대 ══════════════════════════════════════════════════
 
-    @POST("api/v1/family/invite-code")
+    @POST("family/invite-code")
     suspend fun createInviteCode(): InviteCodeResponse
 
     /** 코드가 없으면 200 + 전 필드 null */
-    @GET("api/v1/family/invite-code")
+    @GET("family/invite-code")
     suspend fun getInviteCode(): InviteCodeResponse
 
-    @DELETE("api/v1/family/invite-code")
+    @DELETE("family/invite-code")
     suspend fun deactivateInviteCode()
 
     /** 딥링크 진입 직후 호출. 인증 불필요 */
-    @GET("api/v1/invitations/{inviteCode}")
+    @GET("invitations/{inviteCode}")
     suspend fun previewInvitation(
         @Path("inviteCode") inviteCode: String,
     ): InvitePreviewResponse
 
-    @POST("api/v1/invitations/{inviteCode}/accept")
+    @POST("invitations/{inviteCode}/accept")
     suspend fun acceptInvitation(
         @Path("inviteCode") inviteCode: String,
         @Body body: AcceptInvitationRequest,
@@ -132,40 +147,40 @@ interface IsFamApi {
 
     // ══ 단말 ══════════════════════════════════════════════════
 
-    @POST("api/v1/devices")
+    @POST("devices")
     suspend fun registerDevice(@Body body: RegisterDeviceRequest): RegisterDeviceResponse
 
-    @GET("api/v1/devices/me/capability")
+    @GET("devices/me/capability")
     suspend fun getCapability(): CapabilityResponse
 
-    @PUT("api/v1/devices/me/capability")
+    @PUT("devices/me/capability")
     suspend fun updateCapability(@Body body: UpdateCapabilityRequest): UpdateCapabilityResponse
 
-    @PUT("api/v1/devices/me/push-token")
+    @PUT("devices/me/push-token")
     suspend fun updatePushToken(@Body body: PushTokenRequest): PushTokenResponse
 
-    @GET("api/v1/model-info")
+    @GET("model-info")
     suspend fun getModelInfo(): List<ModelInfoResponse>
 
     // ══ 통화 이벤트 · 분석 ════════════════════════════════════
 
-    @POST("api/v1/call-events")
+    @POST("call-events")
     suspend fun createCallEvent(@Body body: CallEventRequest): CallEventResponse
 
-    @PUT("api/v1/call-events/{callEventId}")
+    @PUT("call-events/{callEventId}")
     suspend fun updateCallEvent(
         @Path("callEventId") callEventId: Int,
         @Body body: UpdateCallEventRequest,
     ): CallEventResponse
 
     /** 온디바이스 분석 결과 제출 */
-    @POST("api/v1/voice-analyses")
+    @POST("voice-analyses")
     suspend fun submitAnalysis(@Body body: SubmitAnalysisRequest): AnalysisResponse
 
-    @GET("api/v1/voice-analyses/{analysisId}")
+    @GET("voice-analyses/{analysisId}")
     suspend fun getAnalysis(@Path("analysisId") analysisId: Long): AnalysisResponse
 
-    @GET("api/v1/voice-analyses")
+    @GET("voice-analyses")
     suspend fun getAnalyses(
         @Query("date_from") dateFrom: String? = null,
         @Query("date_to") dateTo: String? = null,
@@ -175,22 +190,22 @@ interface IsFamApi {
         @Query("page_size") pageSize: Int = 20,
     ): AnalysisListResponse
 
-    @DELETE("api/v1/voice-analyses/{analysisId}")
+    @DELETE("voice-analyses/{analysisId}")
     suspend fun deleteAnalysis(@Path("analysisId") analysisId: Long)
 
     // ══ 알림 ══════════════════════════════════════════════════
 
-    @GET("api/v1/notifications")
+    @GET("notifications")
     suspend fun getNotifications(
         @Query("unread_only") unreadOnly: Boolean? = null,
         @Query("page") page: Int = 1,
         @Query("page_size") pageSize: Int = 20,
     ): NotificationListResponse
 
-    @GET("api/v1/notifications/unread-count")
+    @GET("notifications/unread-count")
     suspend fun getUnreadCount(): UnreadCountResponse
 
-    @PUT("api/v1/notifications/{notificationId}/read")
+    @PUT("notifications/{notificationId}/read")
     suspend fun markNotificationRead(
         @Path("notificationId") notificationId: Long,
     ): MarkReadResponse
@@ -199,22 +214,24 @@ interface IsFamApi {
     //
     // 화자 검증은 온디바이스(ONNX)에서, 딥보이스는 서버에서 합니다.
     // 통화 음성이 서버로 올라가는 유일한 경로입니다.
+    //
+    // ⚠️ 아직 서버에 구현되지 않았습니다 (Phase 8).
+    //    경로는 POST /call-events/{id}/spoof-check 로 예정되어 있습니다.
+    //    업로드 상한 5MB — 초과하면 COMMON_006 입니다.
 
     @Multipart
-    @POST("api/v1/anti-spoofing/detect")
+    @POST("call-events/{callEventId}/spoof-check")
     suspend fun detectSpoofing(
+        @Path("callEventId") callEventId: Int,
         @Part audioFile: MultipartBody.Part,
     ): AntiSpoofingResponse
 
-    @GET("api/v1/anti-spoofing/model-info")
-    suspend fun antiSpoofingModelInfo(): AntiSpoofingModelInfoResponse
-
     // ══ 데모 ══════════════════════════════════════════════════
 
-    @POST("api/v1/demo-sessions")
+    @POST("demo-sessions")
     suspend fun submitDemo(@Body body: DemoRequest): DemoResponse
 
-    @GET("api/v1/demo-sessions")
+    @GET("demo-sessions")
     suspend fun getDemoSessions(
         @Query("page") page: Int = 1,
         @Query("page_size") pageSize: Int = 20,
@@ -222,14 +239,14 @@ interface IsFamApi {
 
     // ══ 설정 ══════════════════════════════════════════════════
 
-    @GET("api/v1/settings")
+    @GET("settings")
     suspend fun getSettings(): SettingsResponse
 
-    @PUT("api/v1/settings")
+    @PUT("settings")
     suspend fun updateSettings(@Body body: UpdateSettingsRequest): SettingsResponse
 
     /** OS 권한 상태를 서버에 동기화 */
-    @PUT("api/v1/settings/permissions")
+    @PUT("settings/permissions")
     suspend fun syncPermissions(@Body body: SyncPermissionsRequest): SettingsResponse
 }
 
@@ -395,12 +412,59 @@ data class RenameFamilyResponse(
 
 // ─── 목소리 등록 ──────────────────────────────────────────────
 
+/**
+ * 목소리 등록 요청.
+ *
+ * embedding 은 base64 로 감싼 float32[192](= 768바이트)입니다.
+ * 길이가 다르거나 디코딩이 안 되면 VOICE_001(422)입니다.
+ */
 @Serializable
-data class VoiceprintResponse(
-    @SerialName("voiceprint_registered") val voiceprintRegistered: Boolean,
+data class VoiceprintRegisterRequest(
+    @SerialName("sentence_id") val sentenceId: Int,
+    /** EmbeddingCodec.encode() 결과 */
+    val embedding: String,
+    /** EmbeddingCodec.MODEL_VERSION. 낮으면 MODEL_001(422) */
     @SerialName("embedding_model_version") val embeddingModelVersion: String,
-    @SerialName("sample_count") val sampleCount: Int,
-    @SerialName("registered_at") val registeredAt: String,
+    @SerialName("audio_quality") val audioQuality: AudioQualityRequest,
+)
+
+/**
+ * 앱이 계산한 음질 지표.
+ *
+ * is_analyzable 만 필수입니다. 나머지는 앱 버전에 따라 빠질 수 있어
+ * 서버가 null 을 허용하고 없는 지표는 판정에서 중립으로 취급합니다.
+ */
+@Serializable
+data class AudioQualityRequest(
+    @SerialName("is_analyzable") val isAnalyzable: Boolean,
+    @SerialName("duration_seconds") val durationSeconds: Double? = null,
+    @SerialName("rms_energy") val rmsEnergy: Double? = null,
+    @SerialName("peak_amplitude") val peakAmplitude: Double? = null,
+    @SerialName("speech_ratio") val speechRatio: Double? = null,
+)
+
+@Serializable
+data class VoiceprintRegisterResponse(
+    @SerialName("voiceprint_registered") val voiceprintRegistered: Boolean,
+    @SerialName("embedding_model_version") val embeddingModelVersion: String? = null,
+    @SerialName("sample_count") val sampleCount: Int = 0,
+    @SerialName("registered_at") val registeredAt: String? = null,
+)
+
+@Serializable
+data class VoiceprintStatusResponse(
+    @SerialName("voiceprint_registered") val voiceprintRegistered: Boolean,
+    @SerialName("embedding_model_version") val embeddingModelVersion: String? = null,
+    @SerialName("sample_count") val sampleCount: Int = 0,
+    val samples: List<VoiceprintSampleDto> = emptyList(),
+    @SerialName("registered_at") val registeredAt: String? = null,
+)
+
+/** quality 가 "review" 면 앱이 재녹음을 유도합니다 */
+@Serializable
+data class VoiceprintSampleDto(
+    @SerialName("sentence_id") val sentenceId: Int,
+    val quality: String,
 )
 
 @Serializable
@@ -766,25 +830,54 @@ data class ApiErrorResponse(
     val message: String? = null,
 )
 
-/** 서버 error_code 를 사용자 문구로 매핑합니다. */
+/**
+ * 서버 error_code → 사용자 문구.
+ *
+ * 문구는 백엔드 ErrorCode 와 동일하게 맞췄습니다.
+ * 같은 상황에서 앱과 서버가 다른 말을 하면 사용자가 혼란스럽습니다.
+ */
 enum class ApiError(val code: String, val message: String) {
-    AuthNotRegistered("AUTH_001", "등록되지 않은 번호예요"),
-    AuthTokenExpired("AUTH_002", "다시 로그인해 주세요"),
+    // ── 인증 ──────────────────────────────────────────────────
+    AuthNotRegistered("AUTH_001", "가입되지 않은 번호예요"),
+    AuthTokenExpired("AUTH_002", "로그인이 만료됐어요. 다시 로그인해 주세요"),
     AuthDuplicatePhone("AUTH_003", "이미 가입된 번호예요"),
-    AuthWrongCode("AUTH_004", "인증번호가 일치하지 않아요"),
-    AuthResendLimit("AUTH_005", "재발송 횟수를 초과했어요. 잠시 후 다시 시도해 주세요"),
-    AuthCodeExpired("AUTH_006", "인증 시간이 지났어요. 다시 받아주세요"),
+    AuthWrongCode("AUTH_004", "인증번호가 맞지 않아요"),
+    AuthResendLimit("AUTH_005", "인증번호 발송 횟수를 초과했어요"),
+    AuthVerifyExpired("AUTH_006", "인증이 만료됐어요. 처음부터 다시 진행해 주세요"),
+    AuthTermsRequired("AUTH_007", "필수 약관에 동의해 주세요"),
+    AuthWrongPassword("AUTH_008", "비밀번호가 맞지 않아요"),
+    AuthLoginRequired("AUTH_009", "로그인이 필요해요"),
 
-    FamilyNotFound("FAMILY_001", "가족 정보를 찾을 수 없어요"),
-    FamilyNoSpace("FAMILY_002", "가족 공간이 없어요"),
+    // ── 가족 ──────────────────────────────────────────────────
+    FamilyMemberNotFound("FAMILY_001", "해당 구성원을 찾을 수 없어요"),
+    FamilyNoSpace("FAMILY_002", "소속된 가족 공간이 없어요"),
     FamilyNotOwner("FAMILY_003", "가족 공간 관리자만 할 수 있어요"),
-    FamilyLeaveBlocked("FAMILY_005", "먼저 다른 가족을 모두 내보내야 해요"),
-    FamilyDeleteBlocked("FAMILY_007", "남은 가족이 있어 삭제할 수 없어요"),
+    FamilyAlreadyJoined("FAMILY_004", "이미 다른 가족 공간에 참여하고 있어요"),
+    FamilyOwnerCannotLeave("FAMILY_005", "관리자는 공간을 삭제한 뒤에 나갈 수 있어요"),
+    FamilyFull("FAMILY_006", "가족 공간 인원이 가득 찼어요"),
+    FamilyHasMembers("FAMILY_007", "남아 있는 구성원이 있어 공간을 삭제할 수 없어요"),
 
-    InviteInvalid("INVITE_001", "만료되었거나 잘못된 초대 코드예요"),
-    VoiceQuality("VOICE_001", "음성 품질이 기준에 미달해요. 다시 녹음해 주세요"),
-    DeviceUnsupported("DEVICE_001", "현재 기기에서는 보호 기능을 사용할 수 없어요"),
+    // ── 초대 ──────────────────────────────────────────────────
+    InviteInvalid("INVITE_001", "만료되었거나 존재하지 않는 초대예요"),
+    InviteAlreadyMember("INVITE_002", "이미 이 가족 공간의 구성원이에요"),
+    InviteConsentRequired("INVITE_003", "음성 공유 동의가 필요해요"),
+
+    // ── 음성 · 단말 · 모델 ────────────────────────────────────
+    VoiceQuality("VOICE_001", "음질이 부족해요. 조용한 곳에서 다시 녹음해 주세요"),
+    DeviceUnsupported("DEVICE_001", "통화 자동녹음을 지원하지 않는 기기예요"),
+    DeviceRequired("DEVICE_002", "단말 정보가 필요해요"),
     ModelOutdated("MODEL_001", "앱을 최신 버전으로 업데이트해 주세요"),
+
+    // ── 공통 ──────────────────────────────────────────────────
+    BadRequest("COMMON_001", "요청 형식이 올바르지 않아요"),
+    InvalidInput("COMMON_002", "입력값을 확인해 주세요"),
+    Forbidden("COMMON_003", "접근 권한이 없어요"),
+    NotFound("COMMON_004", "요청한 정보를 찾을 수 없어요"),
+    MethodNotAllowed("COMMON_005", "지원하지 않는 요청 방식이에요"),
+    PayloadTooLarge("COMMON_006", "파일 크기가 너무 커요"),
+    UnsupportedMediaType("COMMON_007", "지원하지 않는 형식이에요"),
+    ServerError("COMMON_008", "일시적인 오류가 발생했어요"),
+    AnalysisServerError("COMMON_009", "분석 서버와 통신하지 못했어요"),
 
     Unknown("", "잠시 후 다시 시도해 주세요");
 
